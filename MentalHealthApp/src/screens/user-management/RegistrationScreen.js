@@ -1,23 +1,58 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
 
+import { supabase } from '../../lib/supabase';
+
 export default function RegistrationScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleRegister = () => {
-    if (name && email && password && confirmPassword) {
-      if (password !== confirmPassword) {
-        Alert.alert('Error', 'Passwords do not match');
+  const handleRegister = async () => {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedEmail || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: { full_name: trimmedName },
+        },
+      });
+
+      if (error) {
+        Alert.alert('Sign up failed', error.message);
         return;
       }
-      Alert.alert('Success', 'Account created successfully', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
-      ]);
-    } else {
-      Alert.alert('Error', 'Please fill in all fields');
+
+      // If email confirmation is enabled, session can be null.
+      if (data?.session) {
+        Alert.alert('Success', 'Account created and signed in!', [
+          { text: 'OK', onPress: () => navigation.replace('Main') },
+        ]);
+      } else {
+        Alert.alert('Success', 'Account created. Please check your email to confirm your account.', [
+          { text: 'OK', onPress: () => navigation.navigate('Login') },
+        ]);
+      }
+    } catch (e) {
+      Alert.alert('Sign up failed', e?.message ?? 'Unexpected error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -71,8 +106,8 @@ export default function RegistrationScreen({ navigation }) {
           />
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Register</Text>
+        <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleRegister} disabled={isSubmitting}>
+          <Text style={styles.buttonText}>{isSubmitting ? 'Creating...' : 'Register'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -128,6 +163,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
