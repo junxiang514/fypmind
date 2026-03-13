@@ -97,6 +97,7 @@ function MainTabs() {
 export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -147,6 +148,11 @@ export default function App() {
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!isMounted) return;
+      if (_event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+      } else {
+        setIsPasswordRecovery(false);
+      }
       setSession(nextSession ?? null);
     });
 
@@ -168,7 +174,7 @@ export default function App() {
       <NavigationContainer linking={linking}>
         <Stack.Navigator
           key={session ? 'signed-in' : 'signed-out'}
-          initialRouteName={session ? 'Main' : 'Landing'}
+          initialRouteName={isPasswordRecovery ? 'ChangePassword' : (session ? 'Main' : 'Landing')}
         >
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Set New Password' }} />
           <Stack.Screen name="Landing" component={LandingScreen} options={{ headerShown: false }} />

@@ -7,7 +7,8 @@ import { supabase } from '../../lib/supabase';
 import { fetchMyProfile, updateMyProfile } from '../../lib/profiles';
 import { useFocusEffect } from '@react-navigation/native';
 
-const RESET_PASSWORD_REDIRECT = 'mentalhealthapp://reset-password';
+// TODO: After deploying web/reset-password.html, replace with your actual hosted URL
+const RESET_PASSWORD_REDIRECT = 'https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/reset-password.html';
 
 export default function ProfileScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState(null);
