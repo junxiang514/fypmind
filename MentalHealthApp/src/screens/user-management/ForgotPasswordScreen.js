@@ -4,7 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 import { supabase } from '../../lib/supabase';
 
 // TODO: After deploying web/reset-password.html, replace with your actual hosted URL
-const RESET_PASSWORD_REDIRECT = 'https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/reset-password.html';
+const RESET_PASSWORD_REDIRECT = 'https://junxiang514.github.io/fypmind/web/reset-password.html';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
