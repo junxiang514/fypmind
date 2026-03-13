@@ -8,7 +8,7 @@ import { fetchMyProfile, updateMyProfile } from '../../lib/profiles';
 import { useFocusEffect } from '@react-navigation/native';
 
 // TODO: After deploying web/reset-password.html, replace with your actual hosted URL
-const RESET_PASSWORD_REDIRECT = 'https://junxiang514.github.io/fypmind/web/reset-password.html';
+const RESET_PASSWORD_REDIRECT = 'https://junxiang514.github.io/fypmind/MentalHealthApp/web/reset-password.html';
 
 export default function ProfileScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState(null);
