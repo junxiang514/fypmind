@@ -11,7 +11,6 @@ export default function EditProfileScreen({ navigation, route }) {
   const [phone, setPhone] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
-  const [address, setAddress] = useState('');
   const [medicalHistory, setMedicalHistory] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +30,6 @@ export default function EditProfileScreen({ navigation, route }) {
         setPhone(profile?.phone || '');
         setDateOfBirth(profile?.date_of_birth || '');
         setGender(profile?.gender || '');
-        setAddress(profile?.address || '');
         setMedicalHistory(profile?.medical_history || '');
       } catch (e) {
         Alert.alert('Error', e?.message ?? 'Failed to load profile');
@@ -77,7 +75,6 @@ export default function EditProfileScreen({ navigation, route }) {
         phone: phone.trim(),
         date_of_birth: dateOfBirth.trim(),
         gender: gender.trim(),
-        address: address.trim(),
         medical_history: medicalHistory.trim(),
       });
       Alert.alert('Success', 'Profile updated successfully', [
@@ -174,7 +171,7 @@ export default function EditProfileScreen({ navigation, route }) {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Gender</Text>
             <View style={styles.genderContainer}>
-              {['Male', 'Female', 'Other'].map((option) => (
+              {['Male', 'Female'].map((option) => (
                 <TouchableOpacity
                   key={option}
                   style={[
@@ -194,23 +191,6 @@ export default function EditProfileScreen({ navigation, route }) {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </View>
-
-          {/* Address */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Address</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="location-outline" size={18} color="#999" style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, styles.multilineInput]}
-                placeholder="Enter your address"
-                value={address}
-                onChangeText={setAddress}
-                multiline
-                numberOfLines={3}
-                editable={!loading}
-              />
             </View>
           </View>
 

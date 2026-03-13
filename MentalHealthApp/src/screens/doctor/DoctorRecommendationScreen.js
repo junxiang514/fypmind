@@ -1,93 +1,105 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Image, TouchableOpacity, TextInput } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const doctors = [
-  { id: '1', name: 'Dr. Sarah Johnson', specialty: 'Psychiatrist', rating: 4.9, location: 'Kuala Lumpur', image: 'https://randomuser.me/api/portraits/women/44.jpg' },
-  { id: '2', name: 'Dr. Michael Chen', specialty: 'Clinical Psychologist', rating: 4.8, location: 'Petaling Jaya', image: 'https://randomuser.me/api/portraits/men/32.jpg' },
-  { id: '3', name: 'Dr. Emily Davis', specialty: 'Therapist', rating: 4.7, location: 'Subang Jaya', image: 'https://randomuser.me/api/portraits/women/68.jpg' },
-  { id: '4', name: 'Dr. David Wilson', specialty: 'Counselor', rating: 4.6, location: 'Shah Alam', image: 'https://randomuser.me/api/portraits/men/85.jpg' },
-];
+import { ProviderCard } from './components/ProviderCard';
+import { useProviderFinder } from './hooks/useProviderFinder';
 
 export default function DoctorRecommendationScreen() {
-  const [search, setSearch] = useState('');
-  const [selectedSpecialty, setSelectedSpecialty] = useState('All');
-  const [selectedLocation, setSelectedLocation] = useState('All');
+  const {
+    query,
+    setQuery,
+    location,
+    setLocation,
+    serviceType,
+    setServiceType,
+    loading,
+    error,
+    providers,
+    usingMyLocation,
+    radiusKm,
+    runSearch,
+    enableMyLocation,
+    disableMyLocation,
+  } = useProviderFinder({ radiusKm: 10 });
 
-  const specialties = ['All', 'Psychiatrist', 'Clinical Psychologist'];
-  const locations = ['All', 'Kuala Lumpur', 'Petaling Jaya'];
-
-  const renderFilter = () => (
-    <View style={styles.filterContainer}>
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterLabel}>Specialty:</Text>
-        {specialties.map(s => (
-          <TouchableOpacity
-            key={s}
-            style={[styles.filterButton, selectedSpecialty === s && styles.filterButtonActive]}
-            onPress={() => setSelectedSpecialty(s)}
-          >
-            <Text style={[styles.filterButtonText, selectedSpecialty === s && styles.filterButtonTextActive]}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterLabel}>Location:</Text>
-        {locations.map(l => (
-          <TouchableOpacity
-            key={l}
-            style={[styles.filterButton, selectedLocation === l && styles.filterButtonActive]}
-            onPress={() => setSelectedLocation(l)}
-          >
-            <Text style={[styles.filterButtonText, selectedLocation === l && styles.filterButtonTextActive]}>{l}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.doctorImage} />
-      <View style={styles.cardContent}>
-        <Text style={styles.doctorName}>{item.name}</Text>
-        <Text style={styles.specialty}>{item.specialty}</Text>
-        <View style={styles.infoRow}>
-          <Ionicons name="star" size={16} color="#FFD700" />
-          <Text style={styles.rating}>{item.rating}</Text>
-          <Text style={styles.location}>• {item.location}</Text>
-        </View>
-      </View>
-      <TouchableOpacity style={styles.bookButton}>
-        <Text style={styles.bookButtonText}>View Details</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const renderItem = ({ item }) => <ProviderCard provider={item} />;
 
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={doctors}
+        data={providers}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
+            <View style={styles.header}>
+              <Text style={styles.title}>Health Care Provider Finder</Text>
+              <Text style={styles.subtitle}>Search by location and service type.</Text>
+            </View>
+
+            <View style={styles.locationRow}>
+              {usingMyLocation ? (
+                <TouchableOpacity style={styles.locationButton} onPress={disableMyLocation} disabled={loading}>
+                  <Ionicons name="locate" size={16} color="#0f172a" />
+                  <Text style={styles.locationButtonText}>Stop using my location</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.locationButton} onPress={enableMyLocation} disabled={loading}>
+                  <Ionicons name="locate" size={16} color="#0f172a" />
+                  <Text style={styles.locationButtonText}>Use my current location</Text>
+                </TouchableOpacity>
+              )}
+              {usingMyLocation ? (
+                <Text style={styles.locationHint}>Searching within {radiusKm} km of your current location</Text>
+              ) : (
+                <Text style={styles.locationHint}>Or type a city/area in the field below</Text>
+              )}
+            </View>
+
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+              <Ionicons name="search" size={18} color="#64748b" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search doctors..."
-                value={search}
-                onChangeText={setSearch}
+                placeholder="Provider name (optional)"
+                value={query}
+                onChangeText={setQuery}
+                returnKeyType="search"
+                onSubmitEditing={() => runSearch()}
               />
             </View>
-            
+
+        
+
+            <TouchableOpacity style={styles.searchButton} onPress={runSearch} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="search" size={16} color="#fff" />
+                  <Text style={styles.searchButtonText}>Search</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {!!error && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="warning" size={16} color="#b91c1c" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {!loading && !error && providers?.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No providers found</Text>
+                <Text style={styles.emptyText}>Try different location or service type.</Text>
+              </View>
+            )}
+
             <View style={styles.header}>
-              <Text style={styles.title}>Recommended for You</Text>
-              <Text style={styles.subtitle}>Top specialists based on your profile.</Text>
+              <Text style={styles.sectionTitle}>Results</Text>
             </View>
-            {renderFilter()}
           </>
         }
       />
@@ -102,6 +114,11 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -128,40 +145,6 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     padding: 0,
   },
-  filterContainer: {
-    marginBottom: 16,
-  },
-  filterGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  filterLabel: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: 'bold',
-    marginRight: 8,
-  },
-  filterButton: {
-    backgroundColor: '#eee',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  filterButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  filterButtonText: {
-    color: '#333',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  filterButtonTextActive: {
-    color: '#fff',
-  },
   header: {
     marginBottom: 20,
   },
@@ -175,63 +158,112 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  doctorImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
+  locationButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  cardContent: {
+  locationHint: {
+    marginLeft: 10,
+    fontSize: 12,
+    color: '#64748b',
+    flex: 1,
+    textAlign: 'right',
+  },
+  criteriaRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  criteriaField: {
+    flex: 1,
+    marginRight: 10,
+  },
+  criteriaLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  criteriaInput: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#111827',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    marginBottom: 12,
+  },
+  errorText: {
+    marginLeft: 8,
+    color: '#7f1d1d',
+    fontSize: 13,
     flex: 1,
   },
-  doctorName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+  emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  specialty: {
+  emptyTitle: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 6,
+    fontWeight: '700',
+    color: '#111827',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginLeft: 4,
-    marginRight: 8,
-  },
-  location: {
-    fontSize: 14,
-    color: '#888',
-  },
-  bookButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  bookButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+  emptyText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#6b7280',
   },
 });

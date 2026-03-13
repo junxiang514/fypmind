@@ -116,9 +116,6 @@ export default function LoginScreen({ navigation }) {
         <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleLogin} disabled={isSubmitting}>
           <Text style={styles.buttonText}>{isSubmitting ? 'Logging in...' : 'Login'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Registration')}>
-          <Text style={styles.linkText}>Don't have an account? <Text style={styles.linkBold}>Register</Text></Text>
-        </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
   );

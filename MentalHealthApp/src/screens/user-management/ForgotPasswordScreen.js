@@ -3,6 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 
 import { supabase } from '../../lib/supabase';
 
+const RESET_PASSWORD_REDIRECT = 'mentalhealthapp://reset-password';
+
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,7 +18,9 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     try {
       setIsSubmitting(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: RESET_PASSWORD_REDIRECT,
+      });
 
       if (error) {
         Alert.alert('Request failed', error.message);

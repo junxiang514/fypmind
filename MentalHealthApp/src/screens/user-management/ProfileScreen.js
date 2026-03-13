@@ -7,10 +7,13 @@ import { supabase } from '../../lib/supabase';
 import { fetchMyProfile, updateMyProfile } from '../../lib/profiles';
 import { useFocusEffect } from '@react-navigation/native';
 
+const RESET_PASSWORD_REDIRECT = 'mentalhealthapp://reset-password';
+
 export default function ProfileScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [avatarUri, setAvatarUri] = useState(null);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
@@ -86,6 +89,43 @@ export default function ProfileScreen({ navigation }) {
     navigation.navigate('EditProfile', { profile: userProfile });
   };
 
+  const handleChangePassword = async () => {
+    try {
+      setIsSendingReset(true);
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user?.email) {
+        Alert.alert('Error', userError?.message ?? 'Unable to get your email address.');
+        return;
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(userData.user.email, {
+        redirectTo: RESET_PASSWORD_REDIRECT,
+      });
+
+      if (error) {
+        Alert.alert('Request failed', error.message);
+        return;
+      }
+
+      Alert.alert('Reset link sent', 'A password reset link has been sent to your email.');
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to send password reset link.');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  const normalizedGender = userProfile?.gender?.trim().toLowerCase();
+  const genderIconName =
+    normalizedGender === 'male'
+      ? 'male'
+      : normalizedGender === 'female'
+      ? 'female'
+      : null;
+
+  const genderIconColor = normalizedGender === 'female' ? '#E91E63' : '#2196F3';
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -116,7 +156,17 @@ export default function ProfileScreen({ navigation }) {
             )}
             <Text style={styles.avatarEditText}>Tap to change photo</Text>
           </TouchableOpacity>
-          <Text style={styles.userName}>{userProfile?.full_name || 'User'}</Text>
+          <View style={styles.userNameRow}>
+            <Text style={styles.userName}>{userProfile?.full_name || 'User'}</Text>
+            {genderIconName ? (
+              <Ionicons
+                name={genderIconName}
+                size={20}
+                color={genderIconColor}
+                style={styles.genderIcon}
+              />
+            ) : null}
+          </View>
           <Text style={styles.userEmail}>{userProfile?.email || 'email@example.com'}</Text>
         </View>
 
@@ -169,15 +219,6 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
           </View>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Ionicons name="location-outline" size={20} color="#666" style={styles.infoIcon} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{userProfile?.address || 'N/A'}</Text>
-              </View>
-            </View>
-          </View>
         </View>
 
         {/* Medical Information */}
@@ -200,6 +241,16 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
             <Ionicons name="create-outline" size={20} color="#fff" />
             <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.changePasswordButton, isSendingReset && styles.buttonDisabled]}
+            onPress={handleChangePassword}
+            disabled={isSendingReset}
+          >
+            <Ionicons name="lock-closed-outline" size={20} color="#fff" />
+            <Text style={styles.changePasswordButtonText}>
+              {isSendingReset ? 'Sending reset link...' : 'Change Password'}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#fff" />
@@ -272,6 +323,15 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderIcon: {
+    marginLeft: 8,
+    marginTop: 1,
+  },
   userEmail: {
     fontSize: 14,
     color: '#666',
@@ -328,6 +388,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  changePasswordButton: {
+    flexDirection: 'row',
+    backgroundColor: '#5856D6',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  changePasswordButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   logoutButton: {
     flexDirection: 'row',

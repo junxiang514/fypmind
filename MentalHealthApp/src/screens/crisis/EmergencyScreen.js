@@ -1,15 +1,117 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 
-export default function EmergencyScreen() {
+import { fetchEmergencyContact } from '../../lib/emergencyContacts';
+import { getForegroundCoords } from '../../lib/location';
+
+export default function EmergencyScreen({ navigation }) {
+  const isFocused = useIsFocused();
+  const [contact, setContact] = useState(null);
+  const [loadingContact, setLoadingContact] = useState(false);
+
+  const loadContact = async () => {
+    try {
+      setLoadingContact(true);
+      const existing = await fetchEmergencyContact();
+      setContact(existing);
+    } catch (err) {
+      // Show a soft error but do not block the screen
+      console.warn('Failed to load emergency contact', err);
+    } finally {
+      setLoadingContact(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      loadContact();
+    }
+  }, [isFocused]);
+
+  const handleCall = async (number) => {
+    const cleaned = (number || '').replace(/[^0-9+]/g, '');
+    if (!cleaned) {
+      Alert.alert('Cannot place call', 'Phone number is not valid.');
+      return;
+    }
+
+    const url = `tel:${cleaned}`;
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Cannot place call', 'Calling is not supported on this device.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (err) {
+      Alert.alert('Cannot place call', 'Something went wrong while trying to start the call.');
+    }
+  };
+
+  const openWhatsAppToContact = async () => {
+    if (!contact?.phone) {
+      Alert.alert('No emergency contact', 'Please set an emergency contact first.');
+      return;
+    }
+
+    const digitsOnly = contact.phone.replace(/[^0-9]/g, '');
+    if (!digitsOnly) {
+      Alert.alert('Invalid phone number', 'Please update the emergency contact phone number.');
+      return;
+    }
+
+    let coords = null;
+    try {
+      coords = await getForegroundCoords();
+    } catch (err) {
+      // Location might be denied; we will still send the SOS without a map link.
+      console.warn('Unable to get location for SOS', err);
+    }
+
+    const mapUrl = coords
+      ? `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`
+      : null;
+
+    const lines = [
+      `Hi ${contact.name}, I am in an emergency and need help!`,
+      contact?.name ? `Contact: ${contact.name} (${contact.relationship || 'Emergency contact'})` : undefined,
+      mapUrl ? `My current location: ${mapUrl}` : 'Location not available from the device.',
+    ].filter(Boolean);
+
+    const message = encodeURIComponent(lines.join('\n'));
+    const waUrl = `whatsapp://send?phone=${digitsOnly}&text=${message}`;
+    const waFallback = `https://wa.me/${digitsOnly}?text=${message}`;
+
+    try {
+      const supported = await Linking.canOpenURL(waUrl);
+      if (supported) {
+        await Linking.openURL(waUrl);
+      } else {
+        await Linking.openURL(waFallback);
+      }
+    } catch (err) {
+      Alert.alert('Unable to open WhatsApp', 'Please check that WhatsApp is installed and try again.');
+    }
+  };
+
   const handleSOS = () => {
     Alert.alert(
-      "Emergency SOS",
-      "Are you sure you want to call emergency services?",
+      'Emergency SOS',
+      contact?.name
+        ? `Send an SOS WhatsApp message to ${contact.name}?`
+        : 'Send an SOS WhatsApp message to your emergency contact?',
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Call 999", onPress: () => console.log("Calling 999...") }
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          style: 'destructive',
+          onPress: () => {
+            openWhatsAppToContact();
+          },
+        },
       ]
     );
   };
@@ -26,14 +128,46 @@ export default function EmergencyScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.manageButton}
+          onPress={() => navigation.navigate('EmergencyContacts')}
+        >
+          <Ionicons name="person" size={18} color="#111827" />
+          <Text style={styles.manageButtonText}>Customise emergency contact</Text>
+        </TouchableOpacity>
+
+        <View style={styles.contactPreview}>
+          <Text style={styles.contactPreviewTitle}>Current emergency contact</Text>
+          {loadingContact ? (
+            <Text style={styles.contactPreviewText}>Loading...</Text>
+          ) : contact ? (
+            <>
+              <Text style={styles.contactPreviewText}>
+                {contact.name} {contact.relationship ? `(${contact.relationship})` : ''}
+              </Text>
+              <Text style={styles.contactPreviewPhone}>{contact.phone}</Text>
+              {!!contact.notes && (
+                <Text style={styles.contactPreviewNotes} numberOfLines={2}>
+                  {contact.notes}
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.contactPreviewText}>No contact set yet. Please add one.</Text>
+          )}
+        </View>
+
         <View style={styles.infoContainer}>
           <View style={styles.infoItem}>
             <Ionicons name="call" size={24} color="#333" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoTitle}>Befrienders KL</Text>
-              <Text style={styles.infoSubtitle}>03-7627 2929 (24/7)</Text>
+              <Text style={styles.infoSubtitle}>03-7627 2929</Text>
             </View>
-            <TouchableOpacity style={styles.callButton}>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => handleCall('03-7627 2929')}
+            >
               <Text style={styles.callButtonText}>Call</Text>
             </TouchableOpacity>
           </View>
@@ -42,9 +176,26 @@ export default function EmergencyScreen() {
             <Ionicons name="call" size={24} color="#333" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoTitle}>Talian Kasih</Text>
-              <Text style={styles.infoSubtitle}>15999 (24/7)</Text>
+              <Text style={styles.infoSubtitle}>15999</Text>
             </View>
-            <TouchableOpacity style={styles.callButton}>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => handleCall('15999')}
+            >
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.infoItem}>
+            <Ionicons name="call" size={24} color="#333" />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Emergency Services</Text>
+              <Text style={styles.infoSubtitle}>999</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => handleCall('999')}
+            >
               <Text style={styles.callButtonText}>Call</Text>
             </TouchableOpacity>
           </View>
@@ -103,6 +254,49 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 16,
+  },
+  manageButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  contactPreview: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    marginBottom: 24,
+  },
+  contactPreviewTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4B5563',
+    marginBottom: 4,
+  },
+  contactPreviewText: {
+    fontSize: 14,
+    color: '#111827',
+  },
+  contactPreviewPhone: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  contactPreviewNotes: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6B7280',
   },
   infoContainer: {
     width: '100%',
