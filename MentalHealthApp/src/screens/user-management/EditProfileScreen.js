@@ -1,18 +1,75 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { supabase } from '../../lib/supabase';
 import { fetchMyProfile, updateMyProfile } from '../../lib/profiles';
 
+function formatDateForDisplay(value) {
+  if (!value) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+function toIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseIsoDate(value) {
+  if (!value) return new Date();
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return new Date();
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function normalizePhoneWithMalaysiaPrefix(rawValue) {
+  const cleaned = (rawValue || '').replace(/[^0-9+]/g, '');
+
+  if (!cleaned || cleaned === '+') {
+    return '+60';
+  }
+
+  if (cleaned.startsWith('+60')) {
+    return '+60' + cleaned.slice(3).replace(/[^0-9]/g, '');
+  }
+
+  if (cleaned.startsWith('60')) {
+    return '+60' + cleaned.slice(2).replace(/[^0-9]/g, '');
+  }
+
+  if (cleaned.startsWith('0')) {
+    return '+60' + cleaned.slice(1).replace(/[^0-9]/g, '');
+  }
+
+  return '+60' + cleaned.replace(/[^0-9]/g, '');
+}
+
 export default function EditProfileScreen({ navigation, route }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+60');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
   const [medicalHistory, setMedicalHistory] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDobPicker, setShowDobPicker] = useState(false);
+
+  const maxDobDate = new Date();
+  const minDobDate = new Date(1900, 0, 1);
 
   useEffect(() => {
     const init = async () => {
@@ -27,7 +84,7 @@ export default function EditProfileScreen({ navigation, route }) {
         const profile = route.params?.profile ?? (await fetchMyProfile());
         setName(profile?.full_name || '');
         setEmail(profile?.email || sessionData.session.user.email || '');
-        setPhone(profile?.phone || '');
+        setPhone(normalizePhoneWithMalaysiaPrefix(profile?.phone || '+60'));
         setDateOfBirth(profile?.date_of_birth || '');
         setGender(profile?.gender || '');
         setMedicalHistory(profile?.medical_history || '');
@@ -55,7 +112,12 @@ export default function EditProfileScreen({ navigation, route }) {
       Alert.alert('Error', 'Please enter a valid email');
       return false;
     }
-    if (phone.trim() && phone.length < 10) {
+    const normalizedPhone = normalizePhoneWithMalaysiaPrefix(phone).trim();
+    if (normalizedPhone === '+60') {
+      Alert.alert('Error', 'Please enter your phone number.');
+      return false;
+    }
+    if (!/^\+60\d{7,12}$/.test(normalizedPhone)) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return false;
     }
@@ -72,7 +134,7 @@ export default function EditProfileScreen({ navigation, route }) {
       await updateMyProfile({
         full_name: name.trim(),
         email: email.trim(),
-        phone: phone.trim(),
+        phone: normalizePhoneWithMalaysiaPrefix(phone).trim(),
         date_of_birth: dateOfBirth.trim(),
         gender: gender.trim(),
         medical_history: medicalHistory.trim(),
@@ -88,6 +150,22 @@ export default function EditProfileScreen({ navigation, route }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const onDobChange = (_event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDobPicker(false);
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    setDateOfBirth(toIsoDate(selectedDate));
+  };
+
+  const handlePhoneChange = (value) => {
+    setPhone(normalizePhoneWithMalaysiaPrefix(value));
   };
 
   return (
@@ -143,9 +221,9 @@ export default function EditProfileScreen({ navigation, route }) {
               <Ionicons name="call-outline" size={18} color="#999" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter your phone number"
+                placeholder="+6012XXXXXXX"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
                 editable={!loading}
               />
@@ -155,16 +233,35 @@ export default function EditProfileScreen({ navigation, route }) {
           {/* Date of Birth */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Date of Birth</Text>
-            <View style={styles.inputWrapper}>
+            <TouchableOpacity
+              style={styles.inputWrapper}
+              onPress={() => !loading && setShowDobPicker(true)}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
               <Ionicons name="calendar-outline" size={18} color="#999" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={dateOfBirth}
-                onChangeText={setDateOfBirth}
-                editable={!loading}
-              />
-            </View>
+              <Text style={[styles.input, !dateOfBirth && styles.placeholderText]}>
+                {dateOfBirth ? formatDateForDisplay(dateOfBirth) : 'Select date of birth'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDobPicker ? (
+              <View style={styles.datePickerContainer}>
+                <DateTimePicker
+                  value={parseIsoDate(dateOfBirth)}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDobChange}
+                  maximumDate={maxDobDate}
+                  minimumDate={minDobDate}
+                />
+                {Platform.OS === 'ios' ? (
+                  <TouchableOpacity style={styles.datePickerDoneButton} onPress={() => setShowDobPicker(false)}>
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           {/* Gender */}
@@ -291,6 +388,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     padding: 0,
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  datePickerContainer: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 8,
+  },
+  datePickerDoneButton: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  datePickerDoneText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   multilineInput: {
     textAlignVertical: 'top',

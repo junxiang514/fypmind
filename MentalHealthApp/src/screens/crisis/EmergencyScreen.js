@@ -76,9 +76,9 @@ export default function EmergencyScreen({ navigation }) {
       : null;
 
     const lines = [
-      `Hi ${contact.name}, I am in an emergency and need help!`,
+      `Hi ${contact.name}, I am in an panic and need help!`,
       contact?.name ? `Contact: ${contact.name} (${contact.relationship || 'Emergency contact'})` : undefined,
-      mapUrl ? `My current location: ${mapUrl}` : 'Location not available from the device.',
+      mapUrl ? `My current location: ${mapUrl}` : 'Location not available from the device.', '*This is an automated SOS message sent from the Mental Health App.'
     ].filter(Boolean);
 
     const message = encodeURIComponent(lines.join('\n'));
@@ -158,25 +158,12 @@ export default function EmergencyScreen({ navigation }) {
         </View>
 
         <View style={styles.infoContainer}>
-          <View style={styles.infoItem}>
-            <Ionicons name="call" size={24} color="#333" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoTitle}>Befrienders KL</Text>
-              <Text style={styles.infoSubtitle}>03-7627 2929</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.callButton}
-              onPress={() => handleCall('03-7627 2929')}
-            >
-              <Text style={styles.callButtonText}>Call</Text>
-            </TouchableOpacity>
-          </View>
 
           <View style={styles.infoItem}>
             <Ionicons name="call" size={24} color="#333" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoTitle}>Talian Kasih</Text>
-              <Text style={styles.infoSubtitle}>15999</Text>
+              <Text style={styles.infoSubtitle}>24/7 for emotional support</Text>
             </View>
             <TouchableOpacity
               style={styles.callButton}
@@ -189,8 +176,22 @@ export default function EmergencyScreen({ navigation }) {
           <View style={styles.infoItem}>
             <Ionicons name="call" size={24} color="#333" />
             <View style={styles.infoTextContainer}>
-              <Text style={styles.infoTitle}>Emergency Services</Text>
-              <Text style={styles.infoSubtitle}>999</Text>
+              <Text style={styles.infoTitle}>HEAL</Text>
+              <Text style={styles.infoSubtitle}>By Ministry of Health (KKM)</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => handleCall('15555')}
+            >
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.infoItem}>
+            <Ionicons name="call" size={24} color="#333" />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Emergency Services (999)</Text>
+              <Text style={styles.infoSubtitle}>MERS Malaysia</Text>
             </View>
             <TouchableOpacity
               style={styles.callButton}

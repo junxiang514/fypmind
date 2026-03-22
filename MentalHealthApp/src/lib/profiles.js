@@ -1,5 +1,12 @@
 import { supabase } from './supabase';
 
+function normalizeDateOfBirth(value) {
+  if (value === null || value === undefined) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return trimmed;
+}
+
 export async function getAuthedUser() {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
@@ -25,7 +32,7 @@ export async function fetchMyProfile() {
     full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? '',
     email: user.email ?? '',
     phone: '',
-    date_of_birth: '',
+    date_of_birth: null,
     gender: '',
     medical_history: '',
     avatar_url: null,
@@ -48,6 +55,7 @@ export async function updateMyProfile(patch) {
   const payload = {
     id: user.id,
     ...patch,
+    date_of_birth: normalizeDateOfBirth(patch?.date_of_birth),
   };
 
   const { data, error } = await supabase

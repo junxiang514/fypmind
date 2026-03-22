@@ -7,6 +7,21 @@ import { supabase } from '../../lib/supabase';
 import { fetchMyProfile, updateMyProfile } from '../../lib/profiles';
 import { useFocusEffect } from '@react-navigation/native';
 
+function formatDateForDisplay(value) {
+  if (!value) return 'N/A';
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
 // TODO: After deploying web/reset-password.html, replace with your actual hosted URL
 const RESET_PASSWORD_REDIRECT = 'https://junxiang514.github.io/fypmind/MentalHealthApp/web/reset-password.html';
 
@@ -162,7 +177,7 @@ export default function ProfileScreen({ navigation }) {
             {genderIconName ? (
               <Ionicons
                 name={genderIconName}
-                size={20}
+                size={18}
                 color={genderIconColor}
                 style={styles.genderIcon}
               />
@@ -173,8 +188,6 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Personal Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          {/* ...existing code... */}
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={20} color="#666" style={styles.infoIcon} />
@@ -207,7 +220,7 @@ export default function ProfileScreen({ navigation }) {
               <Ionicons name="calendar-outline" size={20} color="#666" style={styles.infoIcon} />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Date of Birth</Text>
-                <Text style={styles.infoValue}>{userProfile?.date_of_birth || 'N/A'}</Text>
+                <Text style={styles.infoValue}>{formatDateForDisplay(userProfile?.date_of_birth)}</Text>
               </View>
             </View>
           </View>
@@ -220,12 +233,6 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
           </View>
-        </View>
-
-        {/* Medical Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Medical Information</Text>
-          {/* ...existing code... */}
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Ionicons name="medical-outline" size={20} color="#666" style={styles.infoIcon} />

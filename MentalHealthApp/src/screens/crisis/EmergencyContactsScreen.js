@@ -4,16 +4,19 @@ import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, Acti
 import { listEmergencyContacts, saveEmergencyContact, deleteEmergencyContact } from '../../lib/emergencyContacts';
 
 export default function EmergencyContactsScreen() {
-  const [contacts, setContacts] = useState([]);
+  const [contact, setContact] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         const existing = await listEmergencyContacts();
-        setContacts(existing || []);
+        const first = (existing || [])[0] || null;
+        setContact(first);
+        setIsEditing(!first);
       } catch (err) {
         Alert.alert('Error', err?.message || 'Failed to load contacts.');
       } finally {
@@ -23,81 +26,72 @@ export default function EmergencyContactsScreen() {
     load();
   }, []);
 
-  const handleChangeField = (index, field, value) => {
-    setContacts((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
+  const handleChangeField = (field, value) => {
+    setContact((prev) => ({ ...(prev || {}), [field]: value }));
   };
 
   const handleAddContact = () => {
-    if (contacts.length >= 3) {
-      Alert.alert('Limit reached', 'You can only save up to 3 emergency contacts.');
+    if (contact) {
+      Alert.alert('Limit reached', 'You can only save one emergency contact.');
       return;
     }
-    setContacts((prev) => [
-      ...prev,
-      {
-        id: null,
-        name: '',
-        relationship: '',
-        phone: '',
-        notes: '',
-      },
-    ]);
+
+    setContact({
+      id: null,
+      name: '',
+      relationship: '',
+      phone: '',
+    });
+    setIsEditing(true);
   };
 
-  const handleDeleteContact = async (index) => {
-    const contact = contacts[index];
+  const handleDeleteContact = async () => {
+    if (!contact) return;
 
-    if (contact?.id) {
-      try {
+    try {
+      if (contact?.id) {
         await deleteEmergencyContact(contact.id);
-      } catch (err) {
-        Alert.alert('Error', err?.message || 'Failed to delete contact.');
-        return;
       }
-    }
 
-    setContacts((prev) => prev.filter((_, i) => i !== index));
+      setContact(null);
+      setIsEditing(false);
+      Alert.alert('Deleted', 'Emergency contact has been removed.');
+    } catch (err) {
+      Alert.alert('Error', err?.message || 'Failed to delete contact.');
+    }
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveContact = async () => {
     try {
       setSaving(true);
 
-      // Basic validation: all non-empty contacts must have name and phone
-      for (const c of contacts) {
-        const hasAny = (c.name || c.relationship || c.phone || c.notes)?.toString().trim().length > 0;
-        if (!hasAny) continue;
-        if (!c.name?.trim() || !c.phone?.trim()) {
-          Alert.alert('Missing information', 'Each contact must have at least a name and phone number.');
-          setSaving(false);
-          return;
-        }
+      if (!contact) {
+        Alert.alert('Missing information', 'Please add a contact first.');
+        return;
       }
 
-      const savedContacts = [];
-
-      for (const c of contacts) {
-        const hasAny = (c.name || c.relationship || c.phone || c.notes)?.toString().trim().length > 0;
-        if (!hasAny) continue;
-
-        const saved = await saveEmergencyContact({
-          id: c.id,
-          name: c.name,
-          relationship: c.relationship,
-          phone: c.phone,
-          notes: c.notes,
-        });
-        savedContacts.push(saved);
+      if (!contact.name?.trim() || !contact.phone?.trim()) {
+        Alert.alert('Missing information', 'Contact must have at least a name and phone number.');
+        return;
       }
 
-      setContacts(savedContacts);
-      Alert.alert('Saved', 'Your emergency contacts have been updated.');
+      const saved = await saveEmergencyContact({
+        id: contact.id,
+        name: contact.name,
+        relationship: contact.relationship,
+        phone: contact.phone,
+        notes: '',
+      });
+
+      // Verify persisted state by reloading from database
+      const refreshed = await listEmergencyContacts();
+      const persisted = (refreshed || []).find((c) => c.id === saved.id) || saved;
+
+      setContact(persisted);
+      setIsEditing(false);
+      Alert.alert('Saved', 'Your emergency contact has been saved to database.');
     } catch (err) {
-      Alert.alert('Error', err?.message || 'Failed to save contacts.');
+      Alert.alert('Error', err?.message || 'Failed to save contact.');
     } finally {
       setSaving(false);
     }
@@ -108,7 +102,7 @@ export default function EmergencyContactsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Emergency Contacts</Text>
         <Text style={styles.subtitle}>
-          You can save up to 3 trusted people who may be contacted when you press the SOS button.
+          Save one trusted person who can be contacted when you press the SOS button.
         </Text>
 
         {loading ? (
@@ -118,62 +112,69 @@ export default function EmergencyContactsScreen() {
           </View>
         ) : (
           <>
-            {contacts.map((contact, index) => (
-              <View key={contact.id || index} style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.cardTitle}>Contact {index + 1}</Text>
-                  <TouchableOpacity onPress={() => handleDeleteContact(index)}>
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
+            {!contact ? (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyTitle}>No emergency contact yet</Text>
+                <Text style={styles.emptySubtitle}>Add one trusted person for quick SOS support.</Text>
+                <TouchableOpacity style={styles.addButton} onPress={handleAddContact}>
+                  <Text style={styles.addButtonText}>Add contact</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.cardTitle}>Emergency Contact Information</Text>
 
                 <Text style={styles.label}>Name *</Text>
                 <TextInput
-                  style={styles.input}
-                  value={contact.name}
-                  onChangeText={(text) => handleChangeField(index, 'name', text)}
+                  style={[styles.input, !isEditing && styles.readOnlyInput]}
+                  value={contact.name || ''}
+                  onChangeText={(text) => handleChangeField('name', text)}
                   placeholder="e.g. Mum, Best Friend"
+                  editable={isEditing}
                 />
 
                 <Text style={styles.label}>Relationship</Text>
                 <TextInput
-                  style={styles.input}
-                  value={contact.relationship}
-                  onChangeText={(text) => handleChangeField(index, 'relationship', text)}
+                  style={[styles.input, !isEditing && styles.readOnlyInput]}
+                  value={contact.relationship || ''}
+                  onChangeText={(text) => handleChangeField('relationship', text)}
                   placeholder="e.g. Mother, Friend, Partner"
+                  editable={isEditing}
                 />
 
                 <Text style={styles.label}>Phone number *</Text>
                 <TextInput
-                  style={styles.input}
-                  value={contact.phone}
-                  onChangeText={(text) => handleChangeField(index, 'phone', text)}
+                  style={[styles.input, !isEditing && styles.readOnlyInput]}
+                  value={contact.phone || ''}
+                  onChangeText={(text) => handleChangeField('phone', text)}
                   keyboardType="phone-pad"
                   placeholder="Include country code, e.g. 6012XXXXXXX"
+                  editable={isEditing}
                 />
 
-                <Text style={styles.label}>Notes (optional)</Text>
-                <TextInput
-                  style={[styles.input, styles.notesInput]}
-                  value={contact.notes}
-                  onChangeText={(text) => handleChangeField(index, 'notes', text)}
-                  placeholder="Any important medical info or instructions."
-                  multiline
-                />
-              </View>
-            ))}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.editButton]}
+                    onPress={() => setIsEditing(true)}
+                    disabled={isEditing}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
 
-            <TouchableOpacity style={styles.addButton} onPress={handleAddContact}>
-              <Text style={styles.addButtonText}>Add another contact</Text>
-            </TouchableOpacity>
+                  <TouchableOpacity style={[styles.actionButton, styles.deleteButton]} onPress={handleDeleteContact}>
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveAll} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save contacts</Text>
-              )}
-            </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.saveButton, (!isEditing || saving) && styles.saveButtonDisabled]}
+                    onPress={handleSaveContact}
+                    disabled={!isEditing || saving}
+                  >
+                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveButtonText}>Save</Text>}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -184,7 +185,7 @@ export default function EmergencyContactsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffff',
   },
   content: {
     padding: 20,
@@ -196,9 +197,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#6b7280',
-    marginBottom: 20,
+    marginBottom: 18,
+    lineHeight: 22,
   },
   loadingRow: {
     flexDirection: 'row',
@@ -209,79 +211,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4b5563',
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyStateContainer: {
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 14,
+    textAlign: 'center',
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#111827',
-  },
-  deleteText: {
-    fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '500',
+    marginTop: 8,
   },
   label: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#4b5563',
     marginBottom: 6,
-    marginTop: 10,
+    marginTop: 12,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#111827',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+  readOnlyInput: {
+    backgroundColor: '#F3F4F6',
+    color: '#4B5563',
   },
   addButton: {
-    marginTop: 4,
-    backgroundColor: '#E5E7EB',
+    marginTop: 8,
+    backgroundColor: '#111827',
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
     alignItems: 'center',
+    alignSelf: 'center',
   },
   addButtonText: {
-    color: '#111827',
-    fontWeight: '600',
-    fontSize: 14,
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
-  saveButton: {
-    marginTop: 20,
-    backgroundColor: '#EF4444',
+  actionRow: {
+    marginTop: 18,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
   },
+  editButton: {
+    backgroundColor: '#E0E7FF',
+  },
+  editButtonText: {
+    color: '#3730A3',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+  },
+  deleteButtonText: {
+    color: '#B91C1C',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  saveButton: {
+    backgroundColor: '#111827',
+  },
+  saveButtonDisabled: {
+    opacity: 0.55,
+  },
   saveButtonText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 14,
   },
 });
