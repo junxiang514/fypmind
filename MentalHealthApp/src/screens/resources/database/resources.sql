@@ -11,9 +11,13 @@ create table if not exists public.educational_contents (
   title text not null,
   summary text,
   category text,
+  video_url text,
   body text,
   created_at timestamptz not null default now()
 );
+
+alter table public.educational_contents
+  add column if not exists video_url text;
 
 alter table public.educational_contents enable row level security;
 
@@ -27,42 +31,147 @@ exception when duplicate_object then null; end $$;
 create index if not exists educational_contents_title_idx on public.educational_contents (title);
 
 -- Seed educational contents (only if empty)
-insert into public.educational_contents (title, summary, category, body)
-select v.title, v.summary, v.category, v.body
+insert into public.educational_contents (title, summary, category, video_url, body)
+select v.title, v.summary, v.category, v.video_url, v.body
 from (
   values
     (
       'Understanding Stress',
       'What stress is, common triggers, and healthy coping strategies.',
       'Wellbeing',
+      'https://www.youtube.com/watch?v=1vx8iUvfyCY',
       'Stress is a normal response to challenges. Helpful coping strategies include adequate sleep, regular exercise, hydration, and talking to someone you trust. If stress feels overwhelming, consider professional support.'
     ),
     (
       'Basics of Anxiety',
       'Recognize symptoms and learn simple grounding techniques.',
       'Anxiety',
+      'https://www.youtube.com/watch?v=tybOi4hjZFQ',
       'Anxiety can involve persistent worry and physical sensations. Try box breathing (inhale 4, hold 4, exhale 4, hold 4) and grounding (name 5 things you see, 4 you feel, 3 you hear, 2 you smell, 1 you taste).'
     ),
     (
       'Sleep Hygiene Tips',
       'Practical habits that improve sleep quality over time.',
       'Sleep',
+      'https://www.youtube.com/watch?v=nm1TxQj9IsQ',
       'Aim for a consistent sleep schedule, reduce caffeine late in the day, keep your room cool and dark, and limit screens before bed. If insomnia persists, consult a clinician.'
     ),
     (
       'Healthy Coping Skills',
       'A quick list of coping tools you can use today.',
       'Coping',
+      'https://www.youtube.com/watch?v=hnpQrMqDoqE',
       'Try: journaling, short walks, stretching, mindful breathing, calling a friend, listening to calming music, and breaking tasks into smaller steps. Not every skill fits everyone—experiment and keep what helps.'
     ),
     (
       'When to Seek Help',
       'Signs that you may benefit from professional support.',
       'Support',
+      'https://www.youtube.com/watch?v=QHkXvPq2pQE',
       'If symptoms persist for weeks, interfere with daily life, or you have thoughts of self-harm, seek professional help. In an emergency, contact local emergency services or a crisis hotline immediately.'
     )
-) as v(title, summary, category, body)
+) as v(title, summary, category, video_url, body)
 where not exists (select 1 from public.educational_contents limit 1);
+
+-- =========================
+-- MRM-03A: Educational Progress (per user)
+-- =========================
+create table if not exists public.educational_content_progress (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  content_id uuid not null references public.educational_contents(id) on delete cascade,
+  completed_steps jsonb not null default '{}'::jsonb,
+  progress_percent numeric(5,2) not null default 0,
+  last_step text,
+  quiz_score integer,
+  quiz_completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, content_id)
+);
+
+create table if not exists public.educational_content_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  content_id uuid not null references public.educational_contents(id) on delete cascade,
+  rating integer check (rating between 1 and 5),
+  feedback_text text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, content_id)
+);
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_edu_progress_updated_at on public.educational_content_progress;
+create trigger trg_edu_progress_updated_at
+before update on public.educational_content_progress
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_edu_feedback_updated_at on public.educational_content_feedback;
+create trigger trg_edu_feedback_updated_at
+before update on public.educational_content_feedback
+for each row execute function public.set_updated_at();
+
+create index if not exists educational_content_progress_user_idx on public.educational_content_progress (user_id);
+create index if not exists educational_content_progress_content_idx on public.educational_content_progress (content_id);
+create index if not exists educational_content_feedback_user_idx on public.educational_content_feedback (user_id);
+create index if not exists educational_content_feedback_content_idx on public.educational_content_feedback (content_id);
+
+alter table public.educational_content_progress enable row level security;
+alter table public.educational_content_feedback enable row level security;
+
+do $$ begin
+  create policy "users can read own progress"
+  on public.educational_content_progress
+  for select
+  using (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "users can insert own progress"
+  on public.educational_content_progress
+  for insert
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "users can update own progress"
+  on public.educational_content_progress
+  for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "users can read own feedback"
+  on public.educational_content_feedback
+  for select
+  using (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "users can insert own feedback"
+  on public.educational_content_feedback
+  for insert
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "users can update own feedback"
+  on public.educational_content_feedback
+  for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
 
 -- =========================
 -- MRM-04: Events & Activities

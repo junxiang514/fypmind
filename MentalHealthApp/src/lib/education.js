@@ -6,6 +6,7 @@ const SAMPLE_CONTENT = [
     title: 'Understanding Stress',
     summary: 'What stress is, common triggers, and healthy coping strategies.',
     category: 'Wellbeing',
+    video_url: 'https://www.youtube.com/watch?v=1vx8iUvfyCY',
     body: 'Stress is a normal response to challenges. Helpful coping strategies include sleep, exercise, and social support.',
   },
   {
@@ -13,6 +14,7 @@ const SAMPLE_CONTENT = [
     title: 'Basics of Anxiety',
     summary: 'Recognize symptoms and learn simple grounding techniques.',
     category: 'Anxiety',
+    video_url: 'https://www.youtube.com/watch?v=tybOi4hjZFQ',
     body: 'Anxiety can involve worry, restlessness, and physical sensations. Try box breathing and grounding (5-4-3-2-1).',
   },
 ];
@@ -22,10 +24,16 @@ function shouldFallback(error) {
   return error?.code === '42P01' || /does not exist/i.test(message);
 }
 
+async function getCurrentUserId() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  return data?.user?.id || null;
+}
+
 export async function listEducationalContents({ query, limit = 50 } = {}) {
   let request = supabase
     .from('educational_contents')
-    .select('id, title, summary, category, body, created_at')
+    .select('id, title, summary, category, video_url, body, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -48,7 +56,7 @@ export async function getEducationalContentById(id) {
 
   const { data, error } = await supabase
     .from('educational_contents')
-    .select('id, title, summary, category, body, created_at')
+    .select('id, title, summary, category, video_url, body, created_at')
     .eq('id', id)
     .single();
 
@@ -58,6 +66,91 @@ export async function getEducationalContentById(id) {
       if (!fallback) throw new Error('Content not found.');
       return fallback;
     }
+    throw error;
+  }
+
+  return data;
+}
+
+export async function getMyEducationalProgress(contentId) {
+  if (!contentId) return null;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('educational_content_progress')
+    .select('id, user_id, content_id, completed_steps, progress_percent, last_step, quiz_score, quiz_completed, updated_at')
+    .eq('user_id', userId)
+    .eq('content_id', contentId)
+    .maybeSingle();
+
+  if (error) {
+    if (shouldFallback(error)) return null;
+    throw error;
+  }
+
+  return data || null;
+}
+
+export async function saveMyEducationalProgress({
+  contentId,
+  completedSteps = {},
+  progressPercent = 0,
+  lastStep = null,
+  quizScore = null,
+  quizCompleted = false,
+} = {}) {
+  if (!contentId) return null;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const payload = {
+    user_id: userId,
+    content_id: contentId,
+    completed_steps: completedSteps,
+    progress_percent: progressPercent,
+    last_step: lastStep,
+    quiz_score: Number.isFinite(quizScore) ? quizScore : null,
+    quiz_completed: Boolean(quizCompleted),
+  };
+
+  const { data, error } = await supabase
+    .from('educational_content_progress')
+    .upsert(payload, { onConflict: 'user_id,content_id' })
+    .select('id, user_id, content_id, completed_steps, progress_percent, last_step, quiz_score, quiz_completed, updated_at')
+    .single();
+
+  if (error) {
+    if (shouldFallback(error)) return null;
+    throw error;
+  }
+
+  return data;
+}
+
+export async function saveMyEducationalFeedback({ contentId, rating = null, feedbackText = '' } = {}) {
+  if (!contentId) return null;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const payload = {
+    user_id: userId,
+    content_id: contentId,
+    rating: Number.isFinite(rating) ? rating : null,
+    feedback_text: String(feedbackText || '').trim() || null,
+  };
+
+  const { data, error } = await supabase
+    .from('educational_content_feedback')
+    .upsert(payload, { onConflict: 'user_id,content_id' })
+    .select('id, user_id, content_id, rating, feedback_text, updated_at')
+    .single();
+
+  if (error) {
+    if (shouldFallback(error)) return null;
     throw error;
   }
 
