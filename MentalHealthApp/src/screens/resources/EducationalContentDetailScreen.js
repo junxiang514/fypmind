@@ -9,9 +9,10 @@ import {
   TouchableOpacity,
   TextInput,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
+import YoutubePlayer from 'react-native-youtube-iframe';
 
 import {
   getEducationalContentById,
@@ -19,21 +20,6 @@ import {
   saveMyEducationalFeedback,
   saveMyEducationalProgress,
 } from '../../lib/education';
-
-const VIDEO_BY_CATEGORY = {
-  anxiety: 'https://www.youtube.com/watch?v=tybOi4hjZFQ',
-  stress: 'https://www.youtube.com/watch?v=z6X5oEIg6Ak',
-  sleep: 'https://www.youtube.com/watch?v=nm1TxQj9IsQ',
-  coping: 'https://www.youtube.com/watch?v=hnpQrMqDoqE',
-  wellbeing: 'https://www.youtube.com/watch?v=1vx8iUvfyCY',
-  support: 'https://www.youtube.com/watch?v=QHkXvPq2pQE',
-};
-
-function inferVideoUrl(category = '', title = '') {
-  const text = `${category} ${title}`.toLowerCase();
-  const key = Object.keys(VIDEO_BY_CATEGORY).find((k) => text.includes(k));
-  return key ? VIDEO_BY_CATEGORY[key] : 'https://www.youtube.com/watch?v=ZToicYcHIOU';
-}
 
 function extractYouTubeId(url = '') {
   if (!url) return null;
@@ -53,14 +39,23 @@ function extractYouTubeId(url = '') {
 
 function toPlayableVideo(item) {
   const rawUrl = String(item?.video_url || '').trim();
-  const fallback = inferVideoUrl(item?.category, item?.title);
-  const sourceUrl = rawUrl || fallback;
+  const sourceUrl = rawUrl;
+  if (!sourceUrl) {
+    return {
+      openUrl: null,
+      embedUrl: null,
+      youtubeId: null,
+      isEmbedded: false,
+    };
+  }
+
   const ytId = extractYouTubeId(sourceUrl);
 
   if (ytId) {
     return {
       openUrl: `https://www.youtube.com/watch?v=${ytId}`,
-      embedUrl: `https://www.youtube.com/embed/${ytId}?playsinline=1&rel=0`,
+      embedUrl: null,
+      youtubeId: ytId,
       isEmbedded: true,
     };
   }
@@ -68,59 +63,49 @@ function toPlayableVideo(item) {
   return {
     openUrl: sourceUrl,
     embedUrl: null,
+    youtubeId: null,
     isEmbedded: false,
   };
 }
 
-function getQuizByCategory(category = '') {
-  const text = category.toLowerCase();
+function normalizeQuiz(payload) {
+  const src = Array.isArray(payload) ? payload : [];
+  return src
+    .map((q) => {
+      const question = String(q?.question || '').trim();
+      const options = Array.isArray(q?.options)
+        ? q.options.map((o) => String(o || '').trim()).filter(Boolean)
+        : [];
+      const answer = Number.isInteger(q?.answer) ? q.answer : -1;
 
-  if (text.includes('anxiety')) {
-    return [
-      {
-        question: 'Which is a grounding method for anxiety?',
-        options: ['Avoid all feelings', '5-4-3-2-1 senses exercise', 'Skip sleep to stay alert', 'Only drink coffee'],
-        answer: 1,
-      },
-      {
-        question: 'A helpful breathing rhythm is:',
-        options: ['Inhale 4, hold 4, exhale 4, hold 4', 'Inhale only', 'Hold breath 60 seconds', 'Breathe as fast as possible'],
-        answer: 0,
-      },
-    ];
-  }
+      if (!question || options.length < 2 || answer < 0 || answer >= options.length) return null;
 
-  if (text.includes('sleep')) {
-    return [
-      {
-        question: 'What supports better sleep hygiene?',
-        options: ['Late caffeine', 'Consistent bedtime', 'Bright phone screen in bed', 'Irregular wake time'],
-        answer: 1,
-      },
-      {
-        question: 'Before bed, it is better to:',
-        options: ['Scroll social media intensely', 'Do light wind-down routine', 'Take long naps', 'Drink energy drinks'],
-        answer: 1,
-      },
-    ];
-  }
+      return { question, options, answer };
+    })
+    .filter(Boolean);
+}
 
-  return [
-    {
-      question: 'Which is a healthy coping strategy?',
-      options: ['Suppress all emotions', 'Break tasks into small steps', 'Isolate completely', 'Ignore stress signals'],
-      answer: 1,
-    },
-    {
-      question: 'When stress is high, a good first step is:',
-      options: ['Pause and breathe slowly', 'Rush to finish everything', 'Skip meals', 'Blame yourself'],
-      answer: 0,
-    },
-  ];
+function normalizeActivities(payload) {
+  const src = Array.isArray(payload) ? payload : [];
+  return src
+    .map((a, idx) => {
+      if (typeof a === 'string') {
+        const label = a.trim();
+        if (!label) return null;
+        return { key: `a-${idx + 1}`, label };
+      }
+
+      const key = String(a?.key || `a-${idx + 1}`).trim();
+      const label = String(a?.label || '').trim();
+      if (!label) return null;
+      return { key, label };
+    })
+    .filter(Boolean);
 }
 
 export default function EducationalContentDetailScreen({ route }) {
   const { id } = route.params || {};
+  const { width } = useWindowDimensions();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -134,15 +119,13 @@ export default function EducationalContentDetailScreen({ route }) {
   const [quizDone, setQuizDone] = useState(false);
   const [journal, setJournal] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0);
-  const [activityChecks, setActivityChecks] = useState({
-    breathe: false,
-    hydrate: false,
-    stretch: false,
-    support: false,
-  });
+  const [activityChecks, setActivityChecks] = useState({});
 
-  const quiz = useMemo(() => getQuizByCategory(item?.category || ''), [item?.category]);
+  const quiz = useMemo(() => normalizeQuiz(item?.quiz_payload), [item?.quiz_payload]);
+  const activities = useMemo(() => normalizeActivities(item?.activity_payload), [item?.activity_payload]);
   const videoMeta = useMemo(() => toPlayableVideo(item), [item]);
+  const playerWidth = Math.max(220, Math.round(width - 68));
+  const playerHeight = Math.round((playerWidth * 9) / 16);
 
   const steps = useMemo(() => ([
     { key: 'learn', title: 'Learn', icon: 'book-outline' },
@@ -188,6 +171,21 @@ export default function EducationalContentDetailScreen({ route }) {
     load();
   }, [id, steps]);
 
+  useEffect(() => {
+    if (!activities.length) {
+      setActivityChecks({});
+      return;
+    }
+
+    setActivityChecks((prev) => {
+      const next = {};
+      for (const a of activities) {
+        next[a.key] = Boolean(prev[a.key]);
+      }
+      return next;
+    });
+  }, [activities]);
+
   const persistProgress = async (nextCompleted, { lastStep = null, nextQuizScore = quizScore, nextQuizDone = quizDone } = {}) => {
     const percent = Math.round((Object.values(nextCompleted).filter(Boolean).length / steps.length) * 100);
     await saveMyEducationalProgress({
@@ -224,7 +222,7 @@ export default function EducationalContentDetailScreen({ route }) {
   };
 
   const submitQuizChoice = () => {
-    if (quizChoice == null) return;
+    if (!quiz.length || quizChoice == null) return;
 
     const isCorrect = quiz[quizIndex]?.answer === quizChoice;
     const nextScore = isCorrect ? quizScore + 1 : quizScore;
@@ -300,15 +298,24 @@ export default function EducationalContentDetailScreen({ route }) {
 
           {videoMeta?.isEmbedded ? (
             <View style={styles.videoFrame}>
-              <WebView
-                source={{ uri: videoMeta.embedUrl }}
-                style={styles.videoWebView}
-                allowsFullscreenVideo
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled
-                domStorageEnabled
+              <YoutubePlayer
+                width={playerWidth}
+                height={playerHeight}
+                play={false}
+                videoId={videoMeta.youtubeId}
+                webViewProps={{
+                  allowsFullscreenVideo: true,
+                  mediaPlaybackRequiresUserAction: true,
+                }}
+                initialPlayerParams={{
+                  rel: false,
+                  modestbranding: true,
+                  controls: true,
+                }}
               />
             </View>
+          ) : !videoMeta?.openUrl ? (
+            <Text style={styles.helpText}>No video link available yet for this content.</Text>
           ) : (
             <Text style={styles.helpText}>Embedded player supports YouTube links. Use external open for other links.</Text>
           )}
@@ -328,17 +335,17 @@ export default function EducationalContentDetailScreen({ route }) {
 
     if (current === 'activity') {
       const checksDone = Object.values(activityChecks).filter(Boolean).length;
+      const requiredChecks = activities.length;
       return (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Interactive activity checklist</Text>
-          <Text style={styles.helpText}>Complete at least 3 activities.</Text>
+          {!activities.length ? (
+            <Text style={styles.helpText}>No activity configured in database for this content yet.</Text>
+          ) : (
+            <Text style={styles.helpText}>Complete all activities ({requiredChecks}) to finish this step.</Text>
+          )}
 
-          {[
-            ['breathe', 'Do 2 minutes slow breathing'],
-            ['hydrate', 'Drink a glass of water'],
-            ['stretch', 'Stretch body for 3 minutes'],
-            ['support', 'Message/call someone you trust'],
-          ].map(([key, label]) => (
+          {activities.map(({ key, label }) => (
             <TouchableOpacity
               key={key}
               style={styles.checkRow}
@@ -354,9 +361,9 @@ export default function EducationalContentDetailScreen({ route }) {
           ))}
 
           <TouchableOpacity
-            style={[styles.actionButton, checksDone < 3 && styles.actionButtonDisabled]}
-            onPress={() => checksDone >= 3 && markStepDone('activity')}
-            disabled={checksDone < 3}
+            style={[styles.actionButton, (checksDone < requiredChecks || !requiredChecks) && styles.actionButtonDisabled]}
+            onPress={() => checksDone >= requiredChecks && requiredChecks > 0 && markStepDone('activity')}
+            disabled={checksDone < requiredChecks || !requiredChecks}
           >
             <Ionicons name="checkmark-done" size={16} color="#fff" />
             <Text style={styles.actionText}>Complete activity</Text>
@@ -366,6 +373,15 @@ export default function EducationalContentDetailScreen({ route }) {
     }
 
     if (current === 'quiz') {
+      if (!quiz.length) {
+        return (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Quiz session</Text>
+            <Text style={styles.helpText}>No quiz configured in database for this content yet.</Text>
+          </View>
+        );
+      }
+
       if (quizDone) {
         return (
           <View style={styles.sectionCard}>
@@ -626,10 +642,8 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     overflow: 'hidden',
     backgroundColor: '#000',
-    height: 210,
-  },
-  videoWebView: {
-    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   videoActions: {
     marginTop: 10,

@@ -6,7 +6,7 @@ const SAMPLE_CONTENT = [
     title: 'Understanding Stress',
     summary: 'What stress is, common triggers, and healthy coping strategies.',
     category: 'Wellbeing',
-    video_url: 'https://www.youtube.com/watch?v=1vx8iUvfyCY',
+    video_url: null,
     body: 'Stress is a normal response to challenges. Helpful coping strategies include sleep, exercise, and social support.',
   },
   {
@@ -14,7 +14,7 @@ const SAMPLE_CONTENT = [
     title: 'Basics of Anxiety',
     summary: 'Recognize symptoms and learn simple grounding techniques.',
     category: 'Anxiety',
-    video_url: 'https://www.youtube.com/watch?v=tybOi4hjZFQ',
+    video_url: null,
     body: 'Anxiety can involve worry, restlessness, and physical sensations. Try box breathing and grounding (5-4-3-2-1).',
   },
 ];
@@ -33,7 +33,7 @@ async function getCurrentUserId() {
 export async function listEducationalContents({ query, limit = 50 } = {}) {
   let request = supabase
     .from('educational_contents')
-    .select('id, title, summary, category, video_url, body, created_at')
+    .select('id, title, summary, category, video_url, quiz_payload, activity_payload, body, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -56,7 +56,7 @@ export async function getEducationalContentById(id) {
 
   const { data, error } = await supabase
     .from('educational_contents')
-    .select('id, title, summary, category, video_url, body, created_at')
+    .select('id, title, summary, category, video_url, quiz_payload, activity_payload, body, created_at')
     .eq('id', id)
     .single();
 
@@ -91,6 +91,33 @@ export async function getMyEducationalProgress(contentId) {
   }
 
   return data || null;
+}
+
+export async function getMyEducationalProgressMap(contentIds = []) {
+  const ids = Array.isArray(contentIds)
+    ? contentIds.map((x) => String(x || '').trim()).filter(Boolean)
+    : [];
+
+  if (!ids.length) return {};
+
+  const userId = await getCurrentUserId();
+  if (!userId) return {};
+
+  const { data, error } = await supabase
+    .from('educational_content_progress')
+    .select('content_id, progress_percent, quiz_score, quiz_completed, updated_at')
+    .eq('user_id', userId)
+    .in('content_id', ids);
+
+  if (error) {
+    if (shouldFallback(error)) return {};
+    throw error;
+  }
+
+  return (data || []).reduce((acc, row) => {
+    acc[String(row.content_id)] = row;
+    return acc;
+  }, {});
 }
 
 export async function saveMyEducationalProgress({

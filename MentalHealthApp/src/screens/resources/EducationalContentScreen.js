@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { listEducationalContents } from '../../lib/education';
+import { getMyEducationalProgressMap, listEducationalContents } from '../../lib/education';
 
 export default function EducationalContentScreen({ navigation }) {
   const [query, setQuery] = useState('');
@@ -10,26 +10,44 @@ export default function EducationalContentScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const rows = await listEducationalContents({ query });
-      setItems(rows);
+
+      const progressMap = await getMyEducationalProgressMap(rows.map((r) => r.id));
+      const merged = rows.map((row) => {
+        const my = progressMap[String(row.id)];
+        return {
+          ...row,
+          progress_percent: Number(my?.progress_percent || 0),
+        };
+      });
+
+      setItems(merged);
     } catch (err) {
       setError(err?.message || 'Failed to load educational content.');
       setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
 
-  const renderItem = ({ item }) => (
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', load);
+    return unsubscribe;
+  }, [navigation, load]);
+
+  const renderItem = ({ item }) => {
+    const percent = Math.max(0, Math.min(100, Math.round(item?.progress_percent || 0)));
+    const progressLabel = percent >= 100 ? 'Completed' : `Progress: ${percent}%`;
+
+    return (
     <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('EducationalContentDetail', { id: item.id })}
@@ -41,10 +59,17 @@ export default function EducationalContentScreen({ navigation }) {
         <Text style={styles.title}>{item?.title || 'Untitled'}</Text>
         {!!item?.category && <Text style={styles.meta}>{item.category}</Text>}
         {!!item?.summary && <Text style={styles.summary} numberOfLines={2}>{item.summary}</Text>}
+        <View style={styles.progressWrap}>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${percent}%` }]} />
+          </View>
+          <Text style={[styles.progressText, percent >= 100 && styles.progressTextDone]}>{progressLabel}</Text>
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -245,5 +270,28 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 13,
     color: '#475569',
+  },
+  progressWrap: {
+    marginTop: 8,
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#dbeafe',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#2563eb',
+  },
+  progressText: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#1d4ed8',
+    fontWeight: '700',
+  },
+  progressTextDone: {
+    color: '#15803d',
   },
 });

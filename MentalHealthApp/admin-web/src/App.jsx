@@ -1,24 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase, supabaseInitError, publicReadClient } from './lib/supabase';
 import mindLogo from '../../assets/MindAppLogo.png';
-
-const EMPTY_EVENT = {
-  title: '',
-  description: '',
-  category: '',
-  start_at: '',
-  end_at: '',
-  location: '',
-  address: '',
-};
-
-const EMPTY_CONTENT = {
-  title: '',
-  summary: '',
-  category: '',
-  video_url: '',
-  body: '',
-};
+import EventsEditor, { EMPTY_EVENT } from './components/EventsEditor';
+import EducationalContentEditor, {
+  EMPTY_CONTENT,
+  normalizeActivityPayload,
+  normalizeQuizPayload,
+} from './components/EducationalContentEditor';
+import UserEditor from './components/UserEditor';
 
 function toInputDateTime(value) {
   if (!value) return '';
@@ -127,12 +116,12 @@ export default function App() {
       const [eventsRes, contentsRes, usersRes] = await Promise.allSettled([
         (publicReadClient || supabase)
           .from('events')
-          .select('id, title, description, category, start_at, end_at, location, address, created_at')
+          .select('id, title, description, detailed_description, objective, agenda, category, start_at, end_at, location, address, fee, location_link, image_urls, created_at')
           .order('created_at', { ascending: false })
           .limit(500),
         (publicReadClient || supabase)
           .from('educational_contents')
-          .select('id, title, summary, category, video_url, body, created_at')
+          .select('id, title, summary, category, video_url, quiz_payload, activity_payload, body, created_at')
           .order('created_at', { ascending: false })
           .limit(500),
         supabase
@@ -261,11 +250,17 @@ export default function App() {
     setEventForm({
       title: selectedEvent.title || '',
       description: selectedEvent.description || '',
+      detailed_description: selectedEvent.detailed_description || '',
+      objective: selectedEvent.objective || '',
+      agenda: selectedEvent.agenda || '',
       category: selectedEvent.category || '',
       start_at: toInputDateTime(selectedEvent.start_at),
       end_at: toInputDateTime(selectedEvent.end_at),
       location: selectedEvent.location || '',
       address: selectedEvent.address || '',
+      fee: selectedEvent.fee || '',
+      location_link: selectedEvent.location_link || '',
+      image_urls_text: Array.isArray(selectedEvent.image_urls) ? selectedEvent.image_urls.join('\n') : '',
     });
   }, [selectedEventId, events]);
 
@@ -279,6 +274,8 @@ export default function App() {
       summary: selectedContent.summary || '',
       category: selectedContent.category || '',
       video_url: selectedContent.video_url || '',
+      quiz_payload: normalizeQuizPayload(selectedContent.quiz_payload),
+      activity_payload: normalizeActivityPayload(selectedContent.activity_payload),
       body: selectedContent.body || '',
     });
   }, [selectedContentId, contents]);
@@ -302,19 +299,31 @@ export default function App() {
 
   async function saveEvent() {
     if (!eventForm.title.trim()) return setError('Event title is required.');
+    if (!eventForm.location_link.trim()) return setError('Location link is required (single navigation source).');
     setSaving(true);
     setError('');
     setStatus('');
     try {
+      const imageUrls = String(eventForm.image_urls_text || '')
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+
       const payload = {
         id: selectedEventId || undefined,
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || null,
+        detailed_description: eventForm.detailed_description.trim() || null,
+        objective: eventForm.objective.trim() || null,
+        agenda: eventForm.agenda.trim() || null,
         category: eventForm.category.trim() || null,
         start_at: toIso(eventForm.start_at),
         end_at: toIso(eventForm.end_at),
         location: eventForm.location.trim() || null,
         address: eventForm.address.trim() || null,
+        fee: eventForm.fee.trim() || null,
+        location_link: eventForm.location_link.trim() || null,
+        image_urls: imageUrls,
       };
       const { error: upsertError } = await supabase.from('events').upsert(payload, { onConflict: 'id' });
       if (upsertError) throw upsertError;
@@ -345,6 +354,31 @@ export default function App() {
 
   async function saveContent() {
     if (!contentForm.title.trim()) return setError('Content title is required.');
+
+    const quizPayload = (contentForm.quiz_payload || [])
+      .map((q) => ({
+        question: String(q?.question || '').trim(),
+        options: Array.isArray(q?.options) ? q.options.map((x) => String(x || '').trim()).filter(Boolean) : [],
+        answer: Number.isInteger(q?.answer) ? q.answer : 0,
+      }))
+      .filter((q) => q.question);
+
+    for (const q of quizPayload) {
+      if (q.options.length < 2) {
+        return setError('Each quiz question must have at least 2 options.');
+      }
+      if (q.answer < 0 || q.answer >= q.options.length) {
+        return setError(`Quiz answer index out of range for question: ${q.question}`);
+      }
+    }
+
+    const activityPayload = (contentForm.activity_payload || [])
+      .map((a, idx) => ({
+        key: String(a?.key || `activity_${idx + 1}`).trim() || `activity_${idx + 1}`,
+        label: String(a?.label || '').trim(),
+      }))
+      .filter((a) => a.label);
+
     setSaving(true);
     try {
       const payload = {
@@ -353,6 +387,8 @@ export default function App() {
         summary: contentForm.summary.trim() || null,
         category: contentForm.category.trim() || null,
         video_url: contentForm.video_url.trim() || null,
+        quiz_payload: quizPayload,
+        activity_payload: activityPayload,
         body: contentForm.body.trim() || null,
       };
       const { error: upsertError } = await supabase.from('educational_contents').upsert(payload, { onConflict: 'id' });
@@ -508,78 +544,44 @@ export default function App() {
 
         <div className="card form">
           {tab === 'events' && (
-            <>
-              <h3>Event</h3>
-              <label>Title</label>
-              <input value={eventForm.title} onChange={(e) => setEventForm((s) => ({ ...s, title: e.target.value }))} />
-              <label>Description</label>
-              <textarea value={eventForm.description} onChange={(e) => setEventForm((s) => ({ ...s, description: e.target.value }))} />
-              <label>Category</label>
-              <input value={eventForm.category} onChange={(e) => setEventForm((s) => ({ ...s, category: e.target.value }))} />
-              <label>Start at</label>
-              <input type="datetime-local" value={eventForm.start_at} onChange={(e) => setEventForm((s) => ({ ...s, start_at: e.target.value }))} />
-              <label>End at</label>
-              <input type="datetime-local" value={eventForm.end_at} onChange={(e) => setEventForm((s) => ({ ...s, end_at: e.target.value }))} />
-              <label>Location</label>
-              <input value={eventForm.location} onChange={(e) => setEventForm((s) => ({ ...s, location: e.target.value }))} />
-              <label>Address</label>
-              <input value={eventForm.address} onChange={(e) => setEventForm((s) => ({ ...s, address: e.target.value }))} />
-              <div className="row">
-                <button className="btn primary" onClick={saveEvent} disabled={saving}>Save</button>
-                <button className="btn light" onClick={() => { setSelectedEventId(null); setEventForm(EMPTY_EVENT); }}>New</button>
-                {selectedEventId && <button className="btn danger" onClick={deleteEvent} disabled={saving}>Delete</button>}
-              </div>
-            </>
+            <EventsEditor
+              eventForm={eventForm}
+              setEventForm={setEventForm}
+              saving={saving}
+              selectedEventId={selectedEventId}
+              onSave={saveEvent}
+              onDelete={deleteEvent}
+              onNew={() => {
+                setSelectedEventId(null);
+                setEventForm(EMPTY_EVENT);
+              }}
+            />
           )}
 
           {tab === 'contents' && (
-            <>
-              <h3>Educational Content</h3>
-              <label>Title</label>
-              <input value={contentForm.title} onChange={(e) => setContentForm((s) => ({ ...s, title: e.target.value }))} />
-              <label>Summary</label>
-              <textarea value={contentForm.summary} onChange={(e) => setContentForm((s) => ({ ...s, summary: e.target.value }))} />
-              <label>Category</label>
-              <input value={contentForm.category} onChange={(e) => setContentForm((s) => ({ ...s, category: e.target.value }))} />
-              <label>Video URL (YouTube preferred)</label>
-              <input value={contentForm.video_url} onChange={(e) => setContentForm((s) => ({ ...s, video_url: e.target.value }))} />
-              <label>Body</label>
-              <textarea className="tall" value={contentForm.body} onChange={(e) => setContentForm((s) => ({ ...s, body: e.target.value }))} />
-              <div className="row">
-                <button className="btn primary" onClick={saveContent} disabled={saving}>Save</button>
-                <button className="btn light" onClick={() => { setSelectedContentId(null); setContentForm(EMPTY_CONTENT); }}>New</button>
-                {selectedContentId && <button className="btn danger" onClick={deleteContent} disabled={saving}>Delete</button>}
-              </div>
-            </>
+            <EducationalContentEditor
+              contentForm={contentForm}
+              setContentForm={setContentForm}
+              saving={saving}
+              selectedContentId={selectedContentId}
+              onSave={saveContent}
+              onDelete={deleteContent}
+              onNew={() => {
+                setSelectedContentId(null);
+                setContentForm(EMPTY_CONTENT);
+              }}
+            />
           )}
 
-          {tab === 'users' && userForm && (
-            <>
-              <h3>User Profile</h3>
-              <label>Full name</label>
-              <input value={userForm.full_name} onChange={(e) => setUserForm((s) => ({ ...s, full_name: e.target.value }))} />
-              <label>Email</label>
-              <input value={userForm.email} onChange={(e) => setUserForm((s) => ({ ...s, email: e.target.value }))} />
-              <label>Phone</label>
-              <input value={userForm.phone} onChange={(e) => setUserForm((s) => ({ ...s, phone: e.target.value }))} />
-              <label>Gender</label>
-              <input value={userForm.gender} onChange={(e) => setUserForm((s) => ({ ...s, gender: e.target.value }))} />
-              <label>Role</label>
-              <select value={userForm.role} onChange={(e) => setUserForm((s) => ({ ...s, role: e.target.value }))}>
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
-              <label>Medical history</label>
-              <textarea value={userForm.medical_history} onChange={(e) => setUserForm((s) => ({ ...s, medical_history: e.target.value }))} />
-              <div className="checks">
-                <label><input type="checkbox" checked={userForm.is_admin} onChange={(e) => setUserForm((s) => ({ ...s, is_admin: e.target.checked }))} /> is_admin</label>
-                <label><input type="checkbox" checked={userForm.is_active} onChange={(e) => setUserForm((s) => ({ ...s, is_active: e.target.checked }))} /> is_active</label>
-              </div>
-              <div className="row">
-                <button className="btn primary" onClick={saveUser} disabled={saving}>Save</button>
-                {selectedUserId && <button className="btn danger" onClick={deleteUserProfile} disabled={saving}>Delete Profile Row</button>}
-              </div>
-            </>
+          {tab === 'users' && (
+            <UserEditor
+              userForm={userForm}
+              setUserForm={setUserForm}
+              saving={saving}
+              selectedUserId={selectedUserId}
+              onSave={saveUser}
+              onDelete={deleteUserProfile}
+            />
           )}
         </div>
       </main>
