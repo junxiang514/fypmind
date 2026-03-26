@@ -13,6 +13,8 @@ import ForgotPasswordScreen from './src/screens/user-management/ForgotPasswordSc
 import MonitoringScreen from './src/screens/monitoring/MonitoringScreen';
 import DailyAssessmentScreen from './src/screens/monitoring/DailyAssessmentScreen';
 import ClinicalToolsScreen from './src/screens/monitoring/ClinicalToolsScreen';
+import ClinicalToolQuestionnaireScreen from './src/screens/monitoring/ClinicalToolQuestionnaireScreen';
+import ClinicalToolHistoryScreen from './src/screens/monitoring/ClinicalToolHistoryScreen';
 import AIChatScreen from './src/screens/monitoring/AIChatScreen';
 import EmotionalTrendScreen from './src/screens/trend/EmotionalTrendScreen';
 import DoctorRecommendationScreen from './src/screens/doctor/DoctorRecommendationScreen';
@@ -186,6 +188,8 @@ export default function App() {
           {/* Nested Screens for Monitoring */}
           <Stack.Screen name="DailyAssessment" component={DailyAssessmentScreen} options={{ title: 'Daily Assessment' }} />
           <Stack.Screen name="ClinicalTools" component={ClinicalToolsScreen} options={{ title: 'Clinical Tools' }} />
+          <Stack.Screen name="ClinicalToolQuestionnaire" component={ClinicalToolQuestionnaireScreen} options={{ title: 'Assessment' }} />
+          <Stack.Screen name="ClinicalToolHistory" component={ClinicalToolHistoryScreen} options={{ title: 'Historical Report' }} />
           <Stack.Screen name="AIChat" component={AIChatScreen} options={{ title: 'AI Chat' }} />
           
           {/* Profile Screens */}
