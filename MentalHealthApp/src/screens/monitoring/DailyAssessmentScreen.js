@@ -1,70 +1,134 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  listActiveWellbeingQuestions,
+  buildRandomQuestionSet,
+  saveDailyAssessmentEntry,
+} from '../../lib/dailyAssessments';
 
 export default function DailyAssessmentScreen({ navigation }) {
-  const [selectedMood, setSelectedMood] = useState(null);
-  const [notes, setNotes] = useState('');
+  const [allQuestions, setAllQuestions] = useState([]);
+  const [questionSet, setQuestionSet] = useState([]);
+  const [answersByQuestionId, setAnswersByQuestionId] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const moods = [
-    { id: 1, icon: 'happy', label: 'Great', color: '#4CD964' },
-    { id: 2, icon: 'thumbs-up', label: 'Good', color: '#34AADC' },
-    { id: 3, icon: 'remove', label: 'Okay', color: '#FFCC00' },
-    { id: 4, icon: 'sad', label: 'Bad', color: '#FF9500' },
-    { id: 5, icon: 'thunderstorm', label: 'Terrible', color: '#FF3B30' },
-  ];
+  const unansweredCount = useMemo(
+    () => questionSet.filter((q) => !answersByQuestionId[q.id]).length,
+    [questionSet, answersByQuestionId]
+  );
 
-  const handleSubmit = () => {
-    if (!selectedMood) {
-      Alert.alert('Please select a mood');
+  const loadQuestions = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const rows = await listActiveWellbeingQuestions();
+      setAllQuestions(rows);
+      setQuestionSet(buildRandomQuestionSet(rows, 6));
+      setAnswersByQuestionId({});
+    } catch (err) {
+      setError(err?.message || 'Failed to load daily questions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadQuestions();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (questionSet.length && unansweredCount > 0) {
+      Alert.alert('Incomplete', `Please answer all questions. Remaining: ${unansweredCount}`);
       return;
     }
-    Alert.alert('Assessment Saved', 'Thank you for checking in!', [
-      { text: 'OK', onPress: () => navigation.goBack() }
-    ]);
+
+    const values = questionSet
+      .map((q) => Number(answersByQuestionId?.[q.id]?.value))
+      .filter((x) => Number.isFinite(x));
+
+    const averageValue = values.length
+      ? values.reduce((sum, x) => sum + x, 0) / values.length
+      : 3;
+
+    const derivedMoodScore = Math.max(1, Math.min(5, Math.round(averageValue)));
+
+    try {
+      setSaving(true);
+      await saveDailyAssessmentEntry({
+        moodScore: derivedMoodScore,
+        notes: null,
+        questionSet,
+        answersByQuestionId,
+      });
+
+      Alert.alert('Assessment Saved', 'Thank you for checking in!', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } catch (err) {
+      Alert.alert('Save failed', err?.message || 'Could not save your daily assessment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const chooseAnswer = (questionId, option) => {
+    setAnswersByQuestionId((prev) => ({
+      ...prev,
+      [questionId]: option,
+    }));
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.question}>How are you feeling right now?</Text>
-        
-        <View style={styles.moodContainer}>
-          {moods.map((mood) => (
-            <TouchableOpacity 
-              key={mood.id} 
-              style={[
-                styles.moodButton, 
-                selectedMood === mood.id && { backgroundColor: mood.color, borderColor: mood.color }
-              ]}
-              onPress={() => setSelectedMood(mood.id)}
-            >
-              <Ionicons 
-                name={mood.icon} 
-                size={32} 
-                color={selectedMood === mood.id ? '#fff' : mood.color} 
-              />
-              <Text style={[
-                styles.moodLabel,
-                selectedMood === mood.id && { color: '#fff' }
-              ]}>{mood.label}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.dailyHeaderRow}>
+          <Text style={styles.label}>Today check-in questions</Text>
+          <TouchableOpacity style={styles.refreshButton} onPress={() => setQuestionSet(buildRandomQuestionSet(allQuestions, 6))}>
+            <Ionicons name="shuffle" size={14} color="#1d4ed8" />
+            <Text style={styles.refreshButtonText}>Randomize</Text>
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.label}>Any thoughts or notes?</Text>
-        <TextInput
-          style={styles.input}
-          multiline
-          numberOfLines={4}
-          placeholder="Write down your thoughts..."
-          value={notes}
-          onChangeText={setNotes}
-          textAlignVertical="top"
-        />
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading questions...</Text>
+          </View>
+        )}
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitButtonText}>Save Entry</Text>
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+        {!loading && questionSet.map((q) => {
+          const selected = answersByQuestionId[q.id];
+          const options = Array.isArray(q.options) ? q.options : [];
+
+          return (
+            <View key={q.id} style={styles.qCard}>
+              <Text style={styles.qCategory}>{q.category || 'General'}</Text>
+              <Text style={styles.qText}>{q.prompt}</Text>
+              <View style={styles.optWrap}>
+                {options.map((opt, idx) => {
+                  const active = selected?.value === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={`${q.id}-${idx}`}
+                      style={[styles.optBtn, active && styles.optBtnActive]}
+                      onPress={() => chooseAnswer(q.id, opt)}
+                    >
+                      <Text style={[styles.optBtnText, active && styles.optBtnTextActive]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+
+        <TouchableOpacity style={[styles.submitButton, saving && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={saving}>
+          <Text style={styles.submitButtonText}>{saving ? 'Saving...' : 'Save Entry'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -79,46 +143,92 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
   },
-  question: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  moodContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 40,
-  },
-  moodButton: {
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-    width: 60,
-  },
-  moodLabel: {
-    marginTop: 5,
-    fontSize: 12,
-    color: '#666',
-  },
   label: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
     marginBottom: 10,
   },
-  input: {
+  dailyHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  refreshButtonText: {
+    marginLeft: 6,
+    color: '#1d4ed8',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: '#64748b',
+  },
+  errorText: {
+    color: '#b91c1c',
+    marginBottom: 10,
+  },
+  qCard: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    minHeight: 120,
-    marginBottom: 30,
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    marginBottom: 10,
+  },
+  qCategory: {
+    fontSize: 11,
+    color: '#1d4ed8',
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  qText: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  optWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  optBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#fff',
+  },
+  optBtnActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#dbeafe',
+  },
+  optBtnText: {
+    fontSize: 12,
+    color: '#334155',
+  },
+  optBtnTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '700',
   },
   submitButton: {
     backgroundColor: '#007AFF',
@@ -130,5 +240,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
   },
 });

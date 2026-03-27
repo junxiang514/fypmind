@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,29 @@ import { listMyClinicalToolResponses } from '../../lib/clinicalTools';
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatDaysAgo(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfGiven = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = Math.floor((startOfToday - startOfGiven) / dayMs);
+
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
 }
 
 function getAverageScore(item) {
@@ -128,34 +150,23 @@ export default function ClinicalToolHistoryScreen() {
     }, [])
   );
 
-  const summary = useMemo(() => {
-    if (!rows.length) return { total: 0, avg: null };
-    const averageScores = rows
-      .map((r) => getAverageScore(r))
-      .filter((v) => Number.isFinite(v));
-
-    const avg = averageScores.length
-      ? (averageScores.reduce((sum, v) => sum + v, 0) / averageScores.length).toFixed(2)
-      : null;
-
-    return {
-      total: rows.length,
-      avg,
-    };
-  }, [rows]);
-
   const renderItem = ({ item }) => {
     const tool = item?.clinical_tools || {};
     const title = tool?.name || tool?.code || 'Assessment';
     const averageScore = getAverageScore(item);
     const range = getRangeMeta(item);
     const rangeToneStyle = getRangeToneStyle(range.tone);
+    const createdAt = formatDateTime(item.created_at);
+    const daysAgo = formatDaysAgo(item.created_at);
 
     return (
       <View style={styles.card}>
         <View style={styles.cardTop}>
           <Text style={styles.toolName}>{title}</Text>
-          <Text style={styles.dateText}>{formatDateTime(item.created_at)}</Text>
+          <View style={styles.dateWrap}>
+            <Text style={styles.dateText}>{createdAt}</Text>
+            {!!daysAgo && <Text style={styles.dateAgoText}>{daysAgo}</Text>}
+          </View>
         </View>
 
         <View style={styles.row}>
@@ -192,20 +203,13 @@ export default function ClinicalToolHistoryScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>Historical Report</Text>
-            <Text style={styles.subtitle}>Track your previous assessment submissions.</Text>
-
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Total attempts</Text>
-                <Text style={styles.summaryValue}>{summary.total}</Text>
-              </View>
-
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Avg score / question</Text>
-                <Text style={styles.summaryValue}>{summary.avg ?? '-'}</Text>
-              </View>
+            <View style={styles.headerTop}>
+              <Text style={styles.title}>Historical Report</Text>
+              <TouchableOpacity style={styles.refreshBtn} onPress={load}>
+                <Text style={styles.refreshText}>Refresh</Text>
+              </TouchableOpacity>
             </View>
+            <Text style={styles.subtitle}>Track your previous assessment submissions.</Text>
 
             {loading && (
               <View style={styles.loadingRow}>
@@ -220,11 +224,6 @@ export default function ClinicalToolHistoryScreen() {
               <Text style={styles.emptyText}>No assessment submissions yet.</Text>
             )}
           </View>
-        }
-        ListFooterComponent={
-          <TouchableOpacity style={styles.refreshBtn} onPress={load}>
-            <Text style={styles.refreshText}>Refresh</Text>
-          </TouchableOpacity>
         }
       />
     </SafeAreaView>
@@ -243,37 +242,21 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 12,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
   title: {
     fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
+    flex: 1,
   },
   subtitle: {
     marginTop: 6,
     color: '#64748b',
-  },
-  summaryRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 12,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  summaryValue: {
-    marginTop: 4,
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
   },
   loadingRow: {
     marginTop: 10,
@@ -315,6 +298,16 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     color: '#64748b',
+    textAlign: 'right',
+  },
+  dateWrap: {
+    alignItems: 'flex-end',
+  },
+  dateAgoText: {
+    marginTop: 2,
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'right',
   },
   row: {
     marginTop: 10,
@@ -352,12 +345,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   refreshBtn: {
-    marginTop: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 11,
   },
   refreshText: {
     color: '#fff',

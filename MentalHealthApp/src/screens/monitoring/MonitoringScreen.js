@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchMyProfile } from '../../lib/profiles';
 
@@ -26,6 +26,11 @@ export default function MonitoringScreen({ navigation }) {
   }, []);
 
   const displayName = profile?.full_name || 'User';
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 
   const ToolTile = ({ title, description, iconName, style, onPress, fullWidth = false }) => (
     <TouchableOpacity
@@ -54,11 +59,22 @@ export default function MonitoringScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
           <Text style={styles.screenTitle}>MIND</Text>
+          <View style={styles.dateBadge}>
+            <Ionicons name="calendar-outline" size={14} color="#1d4ed8" />
+            <Text style={styles.dateBadgeText}>{todayLabel}</Text>
+          </View>
         </View>
 
         <View style={styles.dashboardHeader}>
+          <View style={styles.headerGlow} />
           <View style={styles.headerAvatar}>
-            <Ionicons name="person-circle" size={42} color="#2563EB" />
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatarImage} />
+            ) : (
+              <View style={styles.headerAvatarFallback}>
+                <Ionicons name="person" size={26} color="#2563EB" />
+              </View>
+            )}
           </View>
           <View style={styles.headerTextBlock}>
             <Text style={styles.greeting}>Hi, {displayName}</Text>
@@ -85,14 +101,14 @@ export default function MonitoringScreen({ navigation }) {
 
           <View style={styles.toolsGrid}>
             <ToolTile
-              title="Daily Self-Assessment"
+              title="Daily Self Check-in"
               description="Check in with how you''re feeling today."
               iconName="sunny"
               style={styles.homeAssessmentCard}
               onPress={() => navigation.navigate('DailyAssessment')}
             />
             <ToolTile
-              title="Clinical Tools"
+              title="Clinical Self Assessment Tools"
               description="Use standardized tests for deeper insights."
               iconName="clipboard"
               style={styles.homeClinicalCard}
@@ -140,44 +156,79 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 30,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   screenTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#0f172a',
   },
-  menuButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  dateBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e5e7eb',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+  },
+  dateBadgeText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: '#1d4ed8',
+    fontWeight: '700',
   },
   dashboardHeader: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerGlow: {
+    position: 'absolute',
+    right: -20,
+    top: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#dbeafe',
   },
   headerTextBlock: {
     flex: 1,
   },
   headerAvatar: {
     marginRight: 12,
+  },
+  headerAvatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#dbeafe',
+  },
+  headerAvatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dbeafe',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
   },
   greeting: {
     fontSize: 18,
@@ -188,6 +239,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     marginTop: 4,
+  },
+  headerChipsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  headerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+  },
+  headerChipText: {
+    marginLeft: 5,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -229,14 +302,14 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: '48%',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 14,
     minHeight: 120,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.13,
+    shadowRadius: 6,
     elevation: 3,
   },
   tileFull: {
@@ -256,18 +329,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
   tileBody: {
-    marginTop: 12,
+    marginTop: 14,
   },
   tileTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: '#fff',
   },
   tileDescription: {
     marginTop: 6,
-    fontSize: 12,
+    fontSize: 12.5,
     color: 'rgba(255, 255, 255, 0.92)',
-    lineHeight: 16,
+    lineHeight: 17,
   },
   homeAssessmentCard: {
     backgroundColor: '#F97316', // warm orange
@@ -285,12 +358,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#EC4899', // pink
   },
   quoteContainer: {
-    marginTop: 8,
+    marginTop: 4,
     padding: 18,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     borderLeftWidth: 4,
     borderLeftColor: '#007AFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   quoteText: {
     fontSize: 15,

@@ -205,6 +205,7 @@ export default function AIChatScreen({ navigation }) {
         keyboardVerticalOffset={100}
         style={styles.inputContainer}
       >
+        <Text style={styles.disclaimerText}>Disclaimer: AI provides suggestions only and does not replace professional diagnosis or treatment.</Text>
         <TextInput
           style={styles.input}
           placeholder="Type a message..."
@@ -263,11 +264,19 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     padding: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
     alignItems: 'center',
+  },
+  disclaimerText: {
+    width: '100%',
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 8,
+    textAlign: 'left',
   },
   input: {
     flex: 1,

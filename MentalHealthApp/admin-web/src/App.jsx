@@ -8,52 +8,24 @@ import EducationalContentEditor, {
   normalizeQuizPayload,
 } from './components/EducationalContentEditor';
 import UserEditor from './components/UserEditor';
-
-function toInputDateTime(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function toIso(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function isAdmin(profile) {
-  return Boolean(profile?.is_admin || String(profile?.role || '').toLowerCase() === 'admin');
-}
-
-function nameFromEmail(email = '') {
-  const base = String(email).split('@')[0] || '';
-  if (!base) return '';
-  return base
-    .replace(/[._-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
-}
-
-function buildFallbackProfile(user, profile) {
-  return {
-    id: user?.id,
-    full_name:
-      profile?.full_name ||
-      user?.user_metadata?.full_name ||
-      user?.user_metadata?.name ||
-      nameFromEmail(user?.email),
-    email: profile?.email || user?.email || '',
-    phone: '',
-    gender: '',
-    medical_history: '',
-    role: profile?.role || 'admin',
-    is_admin: true,
-    is_active: true,
-  };
-}
-
+import WellbeingQuestionsEditor, {
+  EMPTY_WELLBEING_QUESTION,
+  parseOptionsText,
+  serializeOptions,
+} from './components/WellbeingQuestionsEditor';
+import ClinicalToolsEditor, { EMPTY_CLINICAL_TOOL } from './components/ClinicalToolsEditor';
+import AdminRecordList from './components/AdminRecordList';
+import AdminLoginPage from './components/AdminLoginPage';
+import {
+  toInputDateTime,
+  toIso,
+  isAdmin,
+  nameFromEmail,
+  isMissingColumnError,
+  serializeClinicalOptions,
+  parseClinicalOptionsText,
+  buildFallbackProfile,
+} from './lib/adminUtils';
 export default function App() {
   const [sessionUser, setSessionUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -69,10 +41,17 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [contents, setContents] = useState([]);
   const [users, setUsers] = useState([]);
+  const [wellbeingQuestions, setWellbeingQuestions] = useState([]);
+  const [clinicalTools, setClinicalTools] = useState([]);
+  const [clinicalQuestions, setClinicalQuestions] = useState([]);
+  const [clinicalResponses, setClinicalResponses] = useState([]);
 
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [selectedContentId, setSelectedContentId] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+  const [selectedClinicalToolId, setSelectedClinicalToolId] = useState(null);
+  const [selectedToolQuestionId, setSelectedToolQuestionId] = useState(null);
 
   const signedInName =
     profile?.full_name?.trim() ||
@@ -113,7 +92,7 @@ export default function App() {
     setLoading(true);
     setError('');
     try {
-      const [eventsRes, contentsRes, usersRes] = await Promise.allSettled([
+      const [eventsRes, contentsRes, usersRes, questionsRes, toolsRes, clinicalQuestionsRes, responsesRes] = await Promise.allSettled([
         (publicReadClient || supabase)
           .from('events')
           .select('id, title, description, detailed_description, objective, agenda, category, start_at, end_at, location, address, fee, location_link, image_urls, created_at')
@@ -129,15 +108,43 @@ export default function App() {
           .select('id, full_name, email, phone, gender, medical_history, role, is_admin, is_active, updated_at')
           .order('updated_at', { ascending: false })
           .limit(1000),
+        (publicReadClient || supabase)
+          .from('wellbeing_questions')
+          .select('id, category, prompt, answer_type, options, is_active, created_at, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(2000),
+        (publicReadClient || supabase)
+          .from('clinical_tools')
+          .select('id, code, name, description, is_active')
+          .order('code', { ascending: true }),
+        (publicReadClient || supabase)
+          .from('clinical_tool_questions')
+          .select('id, tool_id, question_order, question_text, options')
+          .order('tool_id', { ascending: true })
+          .order('question_order', { ascending: true })
+          .limit(5000),
+        (publicReadClient || supabase)
+          .from('clinical_tool_responses')
+          .select('id, tool_id, answers, created_at')
+          .order('created_at', { ascending: false })
+          .limit(10000),
       ]);
 
       const nextEvents = eventsRes.status === 'fulfilled' ? (eventsRes.value.data || []) : [];
       const nextContents = contentsRes.status === 'fulfilled' ? (contentsRes.value.data || []) : [];
       const nextUsers = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : [];
+      const nextQuestions = questionsRes.status === 'fulfilled' ? (questionsRes.value.data || []) : [];
+      const nextTools = toolsRes.status === 'fulfilled' ? (toolsRes.value.data || []) : [];
+      const nextClinicalQuestions = clinicalQuestionsRes.status === 'fulfilled' ? (clinicalQuestionsRes.value.data || []) : [];
+      const nextResponses = responsesRes.status === 'fulfilled' ? (responsesRes.value.data || []) : [];
 
       const eventsError = eventsRes.status === 'fulfilled' ? eventsRes.value.error : eventsRes.reason;
       const contentsError = contentsRes.status === 'fulfilled' ? contentsRes.value.error : contentsRes.reason;
       const usersError = usersRes.status === 'fulfilled' ? usersRes.value.error : usersRes.reason;
+      const questionsError = questionsRes.status === 'fulfilled' ? questionsRes.value.error : questionsRes.reason;
+      const toolsError = toolsRes.status === 'fulfilled' ? toolsRes.value.error : toolsRes.reason;
+      const clinicalQuestionsError = clinicalQuestionsRes.status === 'fulfilled' ? clinicalQuestionsRes.value.error : clinicalQuestionsRes.reason;
+      const responsesError = responsesRes.status === 'fulfilled' ? responsesRes.value.error : responsesRes.reason;
 
       if (eventsError) {
         throw new Error(
@@ -155,6 +162,53 @@ export default function App() {
         // Non-blocking for UI continuity; admin can still use Events/Content tabs.
         setError(usersError?.message || 'Unable to load user list right now.');
       }
+      if (questionsError) {
+        setError(questionsError?.message || 'Unable to load wellbeing question list right now.');
+      }
+      if (toolsError) {
+        if (isMissingColumnError(toolsError)) {
+          const fallbackToolsRes = await (publicReadClient || supabase)
+            .from('clinical_tools')
+            .select('id, code, name, description')
+            .order('code', { ascending: true });
+
+          if (!fallbackToolsRes.error) {
+            nextTools.splice(0, nextTools.length, ...(fallbackToolsRes.data || []).map((tool) => ({
+              ...tool,
+              is_active: true,
+            })));
+          } else {
+            setError(fallbackToolsRes.error?.message || 'Unable to load self-assessment tools right now.');
+          }
+        } else {
+          setError(toolsError?.message || 'Unable to load self-assessment tools right now.');
+        }
+      }
+
+      let normalizedClinicalQuestions = nextClinicalQuestions;
+      if (clinicalQuestionsError && isMissingColumnError(clinicalQuestionsError)) {
+        const fallbackQuestionsRes = await (publicReadClient || supabase)
+          .from('clinical_tool_questions')
+          .select('id, tool_id, question_order, question_text, options')
+          .order('tool_id', { ascending: true })
+          .order('question_order', { ascending: true })
+          .limit(5000);
+
+        if (!fallbackQuestionsRes.error) {
+          normalizedClinicalQuestions = fallbackQuestionsRes.data || [];
+        } else {
+          setError(fallbackQuestionsRes.error?.message || 'Unable to load self-assessment questions right now.');
+        }
+      } else if (clinicalQuestionsError) {
+        setError(clinicalQuestionsError?.message || 'Unable to load self-assessment questions right now.');
+      }
+
+      if (responsesError) {
+        setError(
+          responsesError?.message ||
+          'Unable to load self-assessment submission records. Add admin read policy for clinical_tool_responses.'
+        );
+      }
 
       const normalizedUsers = [...nextUsers];
       if (currentUser?.id && !normalizedUsers.some((u) => String(u.id) === String(currentUser.id))) {
@@ -164,10 +218,18 @@ export default function App() {
       setEvents(nextEvents);
       setContents(nextContents);
       setUsers(normalizedUsers);
+      setWellbeingQuestions(nextQuestions);
+      setClinicalTools(nextTools);
+      setClinicalQuestions(normalizedClinicalQuestions);
+      setClinicalResponses(nextResponses);
 
       if (!selectedEventId && nextEvents.length) setSelectedEventId(nextEvents[0].id);
       if (!selectedContentId && nextContents.length) setSelectedContentId(nextContents[0].id);
       if (!selectedUserId && normalizedUsers.length) setSelectedUserId(normalizedUsers[0].id);
+      if (!selectedQuestionId && nextQuestions.length) setSelectedQuestionId(nextQuestions[0].id);
+      if (!selectedClinicalToolId && nextTools.length) {
+        setSelectedClinicalToolId(nextTools[0].id);
+      }
     } catch (e) {
       setError(e?.message || 'Failed to load records.');
     } finally {
@@ -210,9 +272,16 @@ export default function App() {
     setEvents([]);
     setContents([]);
     setUsers([]);
+    setWellbeingQuestions([]);
+    setClinicalTools([]);
+    setClinicalQuestions([]);
+    setClinicalResponses([]);
     setSelectedEventId(null);
     setSelectedContentId(null);
     setSelectedUserId(null);
+    setSelectedQuestionId(null);
+    setSelectedClinicalToolId(null);
+    setSelectedToolQuestionId(null);
     setStatus('Logged out.');
   }
 
@@ -234,13 +303,69 @@ export default function App() {
     return users.filter((x) => JSON.stringify(x).toLowerCase().includes(q));
   }, [users, query]);
 
+  const filteredQuestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return wellbeingQuestions;
+    return wellbeingQuestions.filter((x) => JSON.stringify(x).toLowerCase().includes(q));
+  }, [wellbeingQuestions, query]);
+
+  const filteredClinicalTools = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clinicalTools;
+    return clinicalTools.filter((x) => JSON.stringify(x).toLowerCase().includes(q));
+  }, [clinicalTools, query]);
+
+  const clinicalSubmissionStatsByToolId = useMemo(() => {
+    const stats = new Map();
+    for (const response of clinicalResponses) {
+      const key = String(response?.tool_id || '');
+      if (!key) continue;
+      const current = stats.get(key) || { count: 0, lastAt: null };
+      current.count += 1;
+      if (response?.created_at && (!current.lastAt || new Date(response.created_at) > new Date(current.lastAt))) {
+        current.lastAt = response.created_at;
+      }
+      stats.set(key, current);
+    }
+    return stats;
+  }, [clinicalResponses]);
+
+  const clinicalQuestionCountByToolId = useMemo(() => {
+    const stats = new Map();
+    for (const question of clinicalQuestions) {
+      const key = String(question?.tool_id || '');
+      if (!key) continue;
+      stats.set(key, (stats.get(key) || 0) + 1);
+    }
+    return stats;
+  }, [clinicalQuestions]);
+
   const selectedEvent = events.find((x) => x.id === selectedEventId) || null;
   const selectedContent = contents.find((x) => x.id === selectedContentId) || null;
   const selectedUser = users.find((x) => x.id === selectedUserId) || null;
+  const selectedQuestion = wellbeingQuestions.find((x) => x.id === selectedQuestionId) || null;
+  const selectedClinicalTool = clinicalTools.find((x) => x.id === selectedClinicalToolId) || null;
+  const selectedToolQuestions = useMemo(() => {
+    if (!selectedClinicalToolId) return [];
+    return clinicalQuestions
+      .filter((q) => String(q.tool_id) === String(selectedClinicalToolId))
+      .sort((a, b) => Number(a.question_order || 0) - Number(b.question_order || 0));
+  }, [clinicalQuestions, selectedClinicalToolId]);
+  const selectedToolQuestion = useMemo(
+    () => selectedToolQuestions.find((q) => String(q.id) === String(selectedToolQuestionId)) || null,
+    [selectedToolQuestions, selectedToolQuestionId]
+  );
 
   const [eventForm, setEventForm] = useState(EMPTY_EVENT);
   const [contentForm, setContentForm] = useState(EMPTY_CONTENT);
   const [userForm, setUserForm] = useState(null);
+  const [questionForm, setQuestionForm] = useState(EMPTY_WELLBEING_QUESTION);
+  const [clinicalToolForm, setClinicalToolForm] = useState(EMPTY_CLINICAL_TOOL);
+  const [toolQuestionForm, setToolQuestionForm] = useState({
+    question_order: 1,
+    question_text: '',
+    options_text: '',
+  });
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -296,6 +421,61 @@ export default function App() {
       is_active: selectedUser.is_active !== false,
     });
   }, [selectedUserId, users]);
+
+  useEffect(() => {
+    if (!selectedQuestion) {
+      setQuestionForm(EMPTY_WELLBEING_QUESTION);
+      return;
+    }
+
+    setQuestionForm({
+      category: selectedQuestion.category || 'Mood',
+      prompt: selectedQuestion.prompt || '',
+      answer_type: selectedQuestion.answer_type || 'likert_5',
+      options_text: serializeOptions(selectedQuestion.options),
+      is_active: selectedQuestion.is_active !== false,
+    });
+  }, [selectedQuestionId, wellbeingQuestions]);
+
+  useEffect(() => {
+    if (!selectedClinicalTool) {
+      setClinicalToolForm(EMPTY_CLINICAL_TOOL);
+      return;
+    }
+
+    setClinicalToolForm({
+      code: selectedClinicalTool.code || '',
+      name: selectedClinicalTool.name || '',
+      description: selectedClinicalTool.description || '',
+      is_active: selectedClinicalTool.is_active !== false,
+    });
+  }, [selectedClinicalToolId, clinicalTools]);
+
+  useEffect(() => {
+    if (!selectedToolQuestions.length) {
+      setSelectedToolQuestionId(null);
+      setToolQuestionForm({ question_order: 1, question_text: '', options_text: '' });
+      return;
+    }
+
+    const hasSelected = selectedToolQuestions.some((q) => String(q.id) === String(selectedToolQuestionId));
+    if (!hasSelected) {
+      setSelectedToolQuestionId(selectedToolQuestions[0].id);
+    }
+  }, [selectedToolQuestions, selectedToolQuestionId]);
+
+  useEffect(() => {
+    if (!selectedToolQuestion) {
+      setToolQuestionForm({ question_order: 1, question_text: '', options_text: '' });
+      return;
+    }
+
+    setToolQuestionForm({
+      question_order: Number(selectedToolQuestion.question_order) || 1,
+      question_text: selectedToolQuestion.question_text || '',
+      options_text: serializeClinicalOptions(selectedToolQuestion.options),
+    });
+  }, [selectedToolQuestion]);
 
   async function saveEvent() {
     if (!eventForm.title.trim()) return setError('Event title is required.');
@@ -460,26 +640,171 @@ export default function App() {
     }
   }
 
+  async function saveQuestion() {
+    if (!questionForm.prompt.trim()) return setError('Question prompt is required.');
+    if (!questionForm.category.trim()) return setError('Question category is required.');
+
+    const parsedOptions = parseOptionsText(questionForm.options_text);
+    if (questionForm.answer_type === 'custom' && parsedOptions.length < 2) {
+      return setError('Custom type requires at least 2 options (label|value).');
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        id: selectedQuestionId || undefined,
+        category: questionForm.category.trim(),
+        prompt: questionForm.prompt.trim(),
+        answer_type: questionForm.answer_type,
+        options: questionForm.answer_type === 'custom' ? parsedOptions : null,
+        is_active: questionForm.is_active,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upsertError } = await supabase.from('wellbeing_questions').upsert(payload, { onConflict: 'id' });
+      if (upsertError) throw upsertError;
+
+      await loadAll(sessionUser, profile);
+      setStatus('Wellbeing question saved.');
+    } catch (e) {
+      setError(e?.message || 'Failed to save wellbeing question.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteQuestion() {
+    if (!selectedQuestionId) return;
+
+    setSaving(true);
+    try {
+      const { error: deleteError } = await supabase
+        .from('wellbeing_questions')
+        .delete()
+        .eq('id', selectedQuestionId);
+
+      if (deleteError) throw deleteError;
+
+      setSelectedQuestionId(null);
+      await loadAll(sessionUser, profile);
+      setStatus('Wellbeing question deleted.');
+    } catch (e) {
+      setError(e?.message || 'Failed to delete wellbeing question.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveClinicalTool() {
+    if (!selectedClinicalToolId) return;
+
+    setSaving(true);
+    try {
+      const { error: updateError } = await supabase
+        .from('clinical_tools')
+        .update({ is_active: clinicalToolForm.is_active })
+        .eq('id', selectedClinicalToolId);
+
+      if (updateError) {
+        if (isMissingColumnError(updateError)) {
+          throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+        }
+        throw updateError;
+      }
+
+      await loadAll(sessionUser, profile);
+      setStatus('Self-assessment tool updated.');
+    } catch (e) {
+      setError(e?.message || 'Failed to save self-assessment tool.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleClinicalTool(item, nextActive) {
+    if (!item?.id) return;
+    setSaving(true);
+    setError('');
+    try {
+      const { error: updateError } = await supabase
+        .from('clinical_tools')
+        .update({ is_active: nextActive })
+        .eq('id', item.id);
+
+      if (updateError) {
+        if (isMissingColumnError(updateError)) {
+          throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+        }
+        throw updateError;
+      }
+
+      setClinicalTools((prev) => prev.map((tool) => (
+        tool.id === item.id ? { ...tool, is_active: nextActive } : tool
+      )));
+
+      if (selectedClinicalToolId === item.id) {
+        setClinicalToolForm((prev) => ({ ...prev, is_active: nextActive }));
+      }
+
+      setStatus(`Tool ${item.code || item.name || ''} is now ${nextActive ? 'enabled' : 'disabled'}.`);
+    } catch (e) {
+      setError(e?.message || 'Failed to update tool status.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSelectedToolQuestion() {
+    if (!selectedToolQuestionId) return;
+
+    const questionOrder = Number(toolQuestionForm.question_order);
+    if (!Number.isInteger(questionOrder) || questionOrder < 1) {
+      return setError('Question order must be an integer greater than 0.');
+    }
+    if (!toolQuestionForm.question_text.trim()) {
+      return setError('Question text is required.');
+    }
+
+    const parsedOptions = parseClinicalOptionsText(toolQuestionForm.options_text);
+    if (parsedOptions.length < 2) {
+      return setError('Each question requires at least 2 options (label|value).');
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const { error: updateError } = await supabase
+        .from('clinical_tool_questions')
+        .update({
+          question_order: questionOrder,
+          question_text: toolQuestionForm.question_text.trim(),
+          options: parsedOptions,
+        })
+        .eq('id', selectedToolQuestionId);
+
+      if (updateError) throw updateError;
+
+      await loadAll(sessionUser, profile);
+      setStatus('Question updated.');
+    } catch (e) {
+      setError(e?.message || 'Failed to update question.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!sessionUser) {
     return (
-      <div className="login-wrap">
-        <div className="login-header">
-          <img src={mindLogo} alt="MIND" className="logo" />
-          <h1>MIND</h1>
-          <p>Mental Health Intelligence for Nurturing and Development</p>
-        </div>
-
-        <form className="card login-card" onSubmit={onLogin}>
-          <h2>Welcome Back</h2>
-          <p className="muted">Admin portal access</p>
-          <label>Email</label>
-          <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
-          <label>Password</label>
-          <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
-          <button className="btn primary" type="submit" disabled={loading}>Login</button>
-          {!!error && <div className="banner error">{error}</div>}
-        </form>
-      </div>
+      <AdminLoginPage
+        logoSrc={mindLogo}
+        onSubmit={onLogin}
+        email={loginEmail}
+        password={loginPassword}
+        onEmailChange={(e) => setLoginEmail(e.target.value)}
+        onPasswordChange={(e) => setLoginPassword(e.target.value)}
+        loading={loading}
+        error={error}
+      />
     );
   }
 
@@ -500,6 +825,8 @@ export default function App() {
         <div className="tabs">
           <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>Events</button>
           <button className={`tab ${tab === 'contents' ? 'active' : ''}`} onClick={() => setTab('contents')}>Educational Content</button>
+          <button className={`tab ${tab === 'questions' ? 'active' : ''}`} onClick={() => setTab('questions')}>Daily Questions</button>
+          <button className={`tab ${tab === 'clinical-tools' ? 'active' : ''}`} onClick={() => setTab('clinical-tools')}>Self-Assessment Tools</button>
           <button className={`tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>Users</button>
         </div>
         <input placeholder="Search current tab..." value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -509,38 +836,28 @@ export default function App() {
       {!!error && <div className="banner error">{error}</div>}
 
       <main className="layout">
-        <div className="card list">
-          {tab === 'events' && filteredEvents.map((item) => (
-            <button key={item.id} className={`list-item ${item.id === selectedEventId ? 'active' : ''}`} onClick={() => setSelectedEventId(item.id)}>
-              <strong>{item.title}</strong>
-              <small>{item.category || 'N/A'} • {item.location || 'No location'}</small>
-            </button>
-          ))}
-
-          {tab === 'contents' && filteredContents.map((item) => (
-            <button key={item.id} className={`list-item ${item.id === selectedContentId ? 'active' : ''}`} onClick={() => setSelectedContentId(item.id)}>
-              <strong>{item.title}</strong>
-              <small>{item.category || 'N/A'}</small>
-            </button>
-          ))}
-
-          {tab === 'users' && filteredUsers.map((item) => (
-            <button key={item.id} className={`list-item ${item.id === selectedUserId ? 'active' : ''}`} onClick={() => setSelectedUserId(item.id)}>
-              <strong>{item.full_name || item.email || item.id}</strong>
-              <small>{item.email || 'No email'} • {item.role || 'user'}{item.is_admin ? ' • admin' : ''}</small>
-            </button>
-          ))}
-
-          {tab === 'events' && filteredEvents.length === 0 && (
-            <div className="muted">No events found.</div>
-          )}
-          {tab === 'contents' && filteredContents.length === 0 && (
-            <div className="muted">No educational contents found.</div>
-          )}
-          {tab === 'users' && filteredUsers.length === 0 && (
-            <div className="muted">No users found. Check profiles RLS or create your profile row first.</div>
-          )}
-        </div>
+        <AdminRecordList
+          tab={tab}
+          filteredEvents={filteredEvents}
+          filteredContents={filteredContents}
+          filteredUsers={filteredUsers}
+          filteredQuestions={filteredQuestions}
+          filteredClinicalTools={filteredClinicalTools}
+          selectedEventId={selectedEventId}
+          selectedContentId={selectedContentId}
+          selectedUserId={selectedUserId}
+          selectedQuestionId={selectedQuestionId}
+          selectedClinicalToolId={selectedClinicalToolId}
+          setSelectedEventId={setSelectedEventId}
+          setSelectedContentId={setSelectedContentId}
+          setSelectedUserId={setSelectedUserId}
+          setSelectedQuestionId={setSelectedQuestionId}
+          setSelectedClinicalToolId={setSelectedClinicalToolId}
+          clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
+          clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+          saving={saving}
+          toggleClinicalTool={toggleClinicalTool}
+        />
 
         <div className="card form">
           {tab === 'events' && (
@@ -581,6 +898,42 @@ export default function App() {
               selectedUserId={selectedUserId}
               onSave={saveUser}
               onDelete={deleteUserProfile}
+            />
+          )}
+
+          {tab === 'questions' && (
+            <WellbeingQuestionsEditor
+              form={questionForm}
+              setForm={setQuestionForm}
+              saving={saving}
+              selectedId={selectedQuestionId}
+              onSave={saveQuestion}
+              onDelete={deleteQuestion}
+              onNew={() => {
+                setSelectedQuestionId(null);
+                setQuestionForm(EMPTY_WELLBEING_QUESTION);
+              }}
+            />
+          )}
+
+          {tab === 'clinical-tools' && (
+            <ClinicalToolsEditor
+              form={clinicalToolForm}
+              setForm={setClinicalToolForm}
+              saving={saving}
+              selectedId={selectedClinicalToolId}
+              questionCount={clinicalQuestionCountByToolId.get(String(selectedClinicalToolId || '')) || 0}
+              submissionCount={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.count || 0}
+              lastSubmissionAt={
+                clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.lastAt || null
+              }
+              onSave={saveClinicalTool}
+              questions={selectedToolQuestions}
+              selectedQuestionId={selectedToolQuestionId}
+              onSelectQuestion={setSelectedToolQuestionId}
+              questionForm={toolQuestionForm}
+              setQuestionForm={setToolQuestionForm}
+              onSaveQuestion={saveSelectedToolQuestion}
             />
           )}
         </div>
