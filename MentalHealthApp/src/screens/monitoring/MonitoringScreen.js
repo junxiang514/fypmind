@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { fetchMyProfile } from '../../lib/profiles';
 
 export default function MonitoringScreen({ navigation }) {
@@ -8,22 +9,32 @@ export default function MonitoringScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await fetchMyProfile();
-        setProfile(data);
-      } catch (err) {
-        setError(err.message || 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboard();
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchMyProfile();
+      setProfile(data);
+    } catch (err) {
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard])
+  );
+
+  const avatarUri = useMemo(() => {
+    const uri = profile?.avatar_url;
+    if (!uri) return null;
+    const stamp = profile?.updated_at ? encodeURIComponent(profile.updated_at) : Date.now();
+    const separator = uri.includes('?') ? '&' : '?';
+    return `${uri}${separator}t=${stamp}`;
+  }, [profile?.avatar_url, profile?.updated_at]);
 
   const displayName = profile?.full_name || 'User';
   const todayLabel = new Date().toLocaleDateString(undefined, {
@@ -68,8 +79,8 @@ export default function MonitoringScreen({ navigation }) {
         <View style={styles.dashboardHeader}>
           <View style={styles.headerGlow} />
           <View style={styles.headerAvatar}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatarImage} />
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.headerAvatarImage} />
             ) : (
               <View style={styles.headerAvatarFallback}>
                 <Ionicons name="person" size={26} color="#2563EB" />

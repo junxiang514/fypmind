@@ -44,6 +44,13 @@ function shuffle(list) {
   return next;
 }
 
+function toLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function buildRandomQuestionSet(allQuestions, count = 6) {
   if (!Array.isArray(allQuestions) || !allQuestions.length) return [];
 
@@ -148,7 +155,7 @@ export async function listDailyAssessmentTrend(days = 14) {
   const map = new Map();
   (data || []).forEach((row) => {
     const d = new Date(row.created_at);
-    const key = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    const key = Number.isNaN(d.getTime()) ? null : toLocalDateKey(d);
     if (!key) return;
     const prev = map.get(key) || { count: 0, moodSum: 0, wellbeingSum: 0, wellbeingCount: 0 };
     const mood = Number(row.mood_score);
@@ -194,7 +201,7 @@ export async function listDailyAssessmentCalendar(monthDate = new Date()) {
   const map = new Map();
   (data || []).forEach((row) => {
     const d = new Date(row.created_at);
-    const key = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    const key = Number.isNaN(d.getTime()) ? null : toLocalDateKey(d);
     if (!key) return;
 
     const prev = map.get(key) || {
@@ -231,8 +238,8 @@ export async function listDailyAssessmentDetailsByDate(dateIso) {
   if (!userId) throw new Error('User not authenticated');
   if (!dateIso) return [];
 
-  const start = new Date(`${dateIso}T00:00:00.000Z`);
-  const end = new Date(`${dateIso}T23:59:59.999Z`);
+  const start = new Date(`${dateIso}T00:00:00.000`);
+  const end = new Date(`${dateIso}T23:59:59.999`);
 
   const { data, error } = await supabase
     .from('daily_assessment_entries')

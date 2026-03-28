@@ -1,15 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   listDailyAssessmentCalendar,
   listDailyAssessmentDetailsByDate,
   listRecentDailyAssessmentEntries,
   listDailyAssessmentTrend,
 } from '../../lib/dailyAssessments';
+import TrendCalendarCard, { buildMonthCells } from './components/TrendCalendarCard';
+import TrendGraphCard from './components/TrendGraphCard';
+import TrendInsightCard from './components/TrendInsightCard';
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const INSIGHT_MODEL = 'gemini-3-flash-preview';
 
@@ -28,54 +30,39 @@ Rules:
 - Sound positive and motivating, with compassionate energy.
 - Avoid scary, harsh, or overly clinical wording.`;
 
-function dateKey(d) {
-  return d.toISOString().slice(0, 10);
+function parseLocalDateKey(dateKey) {
+  const [year, month, day] = String(dateKey || '').split('-').map((v) => Number(v));
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
 }
 
-function calendarToneByMood(mood) {
-  if (!Number.isFinite(mood)) return { bg: '#e2e8f0', text: '#64748b', border: '#cbd5e1' };
-  if (mood <= 2) return { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' };
-  if (mood <= 3) return { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' };
-  if (mood <= 4) return { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' };
-  return { bg: '#dcfce7', text: '#166534', border: '#86efac' };
+function toLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function buildMonthCells(monthCursor, mapByDate) {
-  const year = monthCursor.getFullYear();
-  const month = monthCursor.getMonth();
-  const start = new Date(year, month, 1);
-  const end = new Date(year, month + 1, 0);
+function getLatestContinuousStreakDays(trendRows) {
+  const keys = [...new Set((trendRows || []).map((row) => String(row?.date || '')).filter(Boolean))].sort();
+  if (!keys.length) return 0;
 
-  const leadingBlanks = start.getDay();
-  const cells = [];
+  const keySet = new Set(keys);
+  let cursor = parseLocalDateKey(keys[keys.length - 1]);
+  if (!cursor || Number.isNaN(cursor.getTime())) return 0;
 
-  for (let i = 0; i < leadingBlanks; i += 1) {
-    cells.push({ key: `blank-${i}`, blank: true });
+  let streak = 0;
+  while (cursor) {
+    const key = toLocalDateKey(cursor);
+    if (!keySet.has(key)) break;
+    streak += 1;
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1);
   }
 
-  for (let day = 1; day <= end.getDate(); day += 1) {
-    const d = new Date(year, month, day);
-    const key = dateKey(d);
-    const row = mapByDate.get(key);
-    cells.push({
-      key,
-      day,
-      blank: false,
-      checkins: Number(row?.checkins || 0),
-      mood: Number(row?.mood),
-    });
-  }
-
-  const trailing = (7 - (cells.length % 7)) % 7;
-  for (let i = 0; i < trailing; i += 1) {
-    cells.push({ key: `trail-${i}`, blank: true });
-  }
-
-  return cells;
+  return streak;
 }
 
 export default function EmotionalTrendScreen() {
-  const screenWidth = Dimensions.get('window').width;
   const [trend, setTrend] = useState([]);
   const [calendarRows, setCalendarRows] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -89,7 +76,6 @@ export default function EmotionalTrendScreen() {
   const [error, setError] = useState('');
   const [aiInsight, setAiInsight] = useState('');
   const [insightLoading, setInsightLoading] = useState(false);
-  const [insightModalVisible, setInsightModalVisible] = useState(false);
 
   const buildInsightInput = (trendRows, entries) => {
     const trendSummary = trendRows.map((x) => `${x.date}: mood=${x.mood ?? '-'}, checkin_avg=${x.wellbeing ?? '-'}`).join('\n');
@@ -103,7 +89,7 @@ export default function EmotionalTrendScreen() {
       return `${entry.created_at}: mood=${entry.mood_score ?? '-'}, avg=${entry.average_score ?? '-'}, answers=[${pairs}]`;
     }).join('\n');
 
-    return `Recent trend (last 14 days):\n${trendSummary || 'No trend data'}\n\nRecent detailed check-ins:\n${answerSummary || 'No detailed entries'}`;
+    return `Recent emotional trend:\n${trendSummary || 'No trend data'}\n\nRecent detailed check-ins:\n${answerSummary || 'No detailed entries'}`;
   };
 
   const fetchAIInsight = async (trendRows, entries) => {
@@ -146,63 +132,59 @@ export default function EmotionalTrendScreen() {
     return text || 'Keep tracking your check-ins. More entries will enable better personalized insights.';
   };
 
-  useEffect(() => {
-    const loadTrendAndInsight = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const [trendRows, recentEntries] = await Promise.all([
-          listDailyAssessmentTrend(14),
-          listRecentDailyAssessmentEntries(14, 12),
-        ]);
+  const loadTrendAndInsight = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const [trendRows, recentEntries] = await Promise.all([
+        listDailyAssessmentTrend(14),
+        listRecentDailyAssessmentEntries(14, 12),
+      ]);
 
-        setTrend(trendRows);
+      setTrend(trendRows);
 
-        if (!trendRows.length && !recentEntries.length) {
-          setAiInsight('You are at the beginning of something meaningful — start your daily check-ins and I will turn your progress into uplifting, personalized insights.');
-          return;
-        }
-
-        setInsightLoading(true);
-        try {
-          const insight = await fetchAIInsight(trendRows, recentEntries);
-          setAiInsight(insight);
-        } catch (insightError) {
-          setAiInsight(
-            insightError?.message ||
-            'You are building a strong self-awareness habit. Keep going — your next few check-ins will unlock even richer, more personalized suggestions.'
-          );
-        } finally {
-          setInsightLoading(false);
-        }
-      } catch (err) {
-        setError(err?.message || 'Failed to load trend data.');
-      } finally {
-        setLoading(false);
+      if (!trendRows.length && !recentEntries.length) {
+        setAiInsight('You are at the beginning of something meaningful — start your daily check-ins and I will turn your progress into uplifting, personalized insights.');
+        return;
       }
-    };
 
-    loadTrendAndInsight();
+      setInsightLoading(true);
+      try {
+        const insight = await fetchAIInsight(trendRows, recentEntries);
+        setAiInsight(insight);
+      } catch (insightError) {
+        setAiInsight(
+          insightError?.message ||
+          'You are building a strong self-awareness habit. Keep going — your next few check-ins will unlock even richer, more personalized suggestions.'
+        );
+      } finally {
+        setInsightLoading(false);
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to load trend data.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    const loadCalendar = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const calendarData = await listDailyAssessmentCalendar(monthCursor);
-
-        const mapByDate = new Map(calendarData.map((r) => [r.date, r]));
-        setCalendarRows(buildMonthCells(monthCursor, mapByDate));
-      } catch (err) {
-        setError(err?.message || 'Failed to load trend data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCalendar();
+  const loadCalendar = useCallback(async () => {
+    try {
+      setError('');
+      setCalendarRows(buildMonthCells(monthCursor, new Map()));
+      const calendarData = await listDailyAssessmentCalendar(monthCursor);
+      const mapByDate = new Map(calendarData.map((r) => [r.date, r]));
+      setCalendarRows(buildMonthCells(monthCursor, mapByDate));
+    } catch (err) {
+      setError(err?.message || 'Failed to load calendar data.');
+    }
   }, [monthCursor]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTrendAndInsight();
+      loadCalendar();
+    }, [loadTrendAndInsight, loadCalendar])
+  );
 
   const monthTitle = useMemo(
     () => monthCursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
@@ -211,41 +193,23 @@ export default function EmotionalTrendScreen() {
 
   const labels = useMemo(
     () => trend.map((x) => {
-      const d = new Date(x.date);
-      return Number.isNaN(d.getTime()) ? x.date : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const d = parseLocalDateKey(x.date);
+      if (!d || Number.isNaN(d.getTime())) return x.date;
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }),
     [trend]
   );
 
-  const moodSeries = useMemo(() => trend.map((x) => Number(x.mood ?? 0)), [trend]);
-  const wellbeingSeries = useMemo(() => trend.map((x) => Number(x.wellbeing ?? 0)), [trend]);
-
-  const data = {
-    labels: labels.length ? labels : ['No data'],
-    datasets: [
-      {
-        data: moodSeries.length ? moodSeries : [0],
-        color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-        strokeWidth: 2,
-      },
-      {
-        data: wellbeingSeries.length ? wellbeingSeries : [0],
-        color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-        strokeWidth: 2,
-      },
-    ],
-    legend: ['Mood', 'Check-in Avg'],
-  };
-
-  const chartConfig = {
-    backgroundGradientFrom: "#fff",
-    backgroundGradientTo: "#fff",
-    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-    strokeWidth: 2,
-    barPercentage: 0.5,
-    useShadowColorFromDataset: false,
-    decimalPlaces: 0,
-  };
+  const overallSeries = useMemo(
+    () => trend.map((x) => {
+      const questionAverage = Number(x.wellbeing);
+      return Number.isFinite(questionAverage) && questionAverage > 0
+        ? Number(questionAverage.toFixed(2))
+        : 0;
+    }),
+    [trend]
+  );
+  const streakDays = useMemo(() => getLatestContinuousStreakDays(trend), [trend]);
 
   const loadDayDetails = async (dateIso) => {
     try {
@@ -269,92 +233,24 @@ export default function EmotionalTrendScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Weekly Emotional Trend</Text>
-        <Text style={styles.subtitle}>Track your check-ins and tap any date to view answered questions.</Text>
-
-        <View style={styles.calendarCard}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity
-              style={styles.monthNavBtn}
-              onPress={() => setMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-            >
-              <Ionicons name="chevron-back" size={16} color="#1d4ed8" />
-            </TouchableOpacity>
-
-            <Text style={styles.calendarTitle}>{monthTitle}</Text>
-
-            <TouchableOpacity
-              style={styles.monthNavBtn}
-              onPress={() => setMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-            >
-              <Ionicons name="chevron-forward" size={16} color="#1d4ed8" />
-            </TouchableOpacity>
+        <View style={styles.heroCard}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons name="pulse" size={20} color="#0369a1" />
           </View>
-
-          <View style={styles.weekHeaderRow}>
-            {WEEKDAYS.map((wd) => (
-              <Text key={wd} style={styles.weekdayText}>{wd}</Text>
-            ))}
-          </View>
-
-          <View style={styles.monthGrid}>
-            {calendarRows.map((cell) => {
-              if (cell.blank) {
-                return (
-                  <View key={cell.key} style={styles.dayCellWrap}>
-                    <View style={styles.dayCellBlank} />
-                  </View>
-                );
-              }
-              const tone = cell.checkins > 0 ? calendarToneByMood(cell.mood) : calendarToneByMood(NaN);
-              const isSelected = selectedDate === cell.key;
-              return (
-                <View key={cell.key} style={styles.dayCellWrap}>
-                  <TouchableOpacity
-                    style={[
-                      styles.dayCell,
-                      { backgroundColor: tone.bg, borderColor: tone.border },
-                      isSelected && styles.dayCellSelected,
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => loadDayDetails(cell.key)}
-                  >
-                    <Text style={[styles.dayText, { color: tone.text }]}>{cell.day}</Text>
-                    <Text style={[styles.dotText, { color: tone.text }]}>
-                      {cell.checkins > 0 ? (cell.checkins > 1 ? `${cell.checkins}x` : '✓') : ''}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#e2e8f0' }]} />
-              <Text style={styles.legendText}>No check-in</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#fee2e2' }]} />
-              <Text style={styles.legendText}>Low mood</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#fef3c7' }]} />
-              <Text style={styles.legendText}>Neutral</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#dcfce7' }]} />
-              <Text style={styles.legendText}>Good mood</Text>
-            </View>
+          <View style={styles.heroTextWrap}>
+            <Text style={styles.title}>Emotional Analysis</Text>
+            <Text style={styles.heroSubtitle}>Track mood flow, check-ins, and daily emotional patterns.</Text>
           </View>
         </View>
 
-        {loading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading trend...</Text>
-          </View>
-        )}
+        <TrendCalendarCard
+          monthTitle={monthTitle}
+          setMonthCursor={setMonthCursor}
+          calendarRows={calendarRows}
+          selectedDate={selectedDate}
+          onPressDay={loadDayDetails}
+          streakDays={streakDays}
+        />
 
         {!!error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -362,56 +258,9 @@ export default function EmotionalTrendScreen() {
           <Text style={styles.emptyText}>No daily assessment data yet. Submit a check-in first.</Text>
         )}
 
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>14-day mood trajectory</Text>
-          <LineChart
-            data={data}
-            width={screenWidth - 40}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chart}
-          />
-        </View>
+        <TrendGraphCard labels={labels} overallSeries={overallSeries} loading={loading} />
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {moodSeries.length ? (moodSeries.reduce((sum, v) => sum + v, 0) / moodSeries.length).toFixed(2) : '-'}
-            </Text>
-            <Text style={styles.statLabel}>Avg Mood</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {moodSeries.length >= 2
-                ? `${(((moodSeries[moodSeries.length - 1] - moodSeries[0]) / Math.max(1, moodSeries[0])) * 100).toFixed(0)}%`
-                : '-'}
-            </Text>
-            <Text style={styles.statLabel}>Improvement</Text>
-          </View>
-        </View>
-
-        <View style={styles.insightContainer}>
-          <Text style={styles.insightTitle}>AI Insight</Text>
-          {insightLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#0284c7" />
-              <Text style={styles.loadingText}>Generating personalized insight...</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.insightText}>
-                {aiInsight || (moodSeries.length
-                  ? 'You are doing great by tracking your wellbeing consistently. Keep this momentum — your insights will become even more powerful and personalized over time.'
-                  : 'You are one check-in away from your first personalized insight — let’s begin and build your momentum.')}
-              </Text>
-              <TouchableOpacity style={styles.readMoreBtn} onPress={() => setInsightModalVisible(true)}>
-                <Text style={styles.readMoreText}>View full insight</Text>
-                <Ionicons name="open-outline" size={14} color="#0369a1" />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        <TrendInsightCard insightLoading={insightLoading} aiInsight={aiInsight} hasData={overallSeries.length > 0} />
       </ScrollView>
 
       <Modal
@@ -461,29 +310,6 @@ export default function EmotionalTrendScreen() {
           </View>
         </View>
       </Modal>
-
-      <Modal
-        visible={insightModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setInsightModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.detailsTitle}>Full AI Insight</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setInsightModalVisible(false)}>
-                <Ionicons name="close" size={16} color="#334155" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.modalBody}>
-              <Text style={styles.fullInsightText}>
-                {aiInsight || 'No insight generated yet. Complete a few daily check-ins to unlock personalized guidance.'}
-              </Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -491,127 +317,53 @@ export default function EmotionalTrendScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#eef3fb',
+    backgroundColor: '#f8fafc',
   },
   content: {
-    padding: 20,
-    paddingBottom: 120,
+    padding: 16,
+    paddingBottom: 32,
+  },
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  heroIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    marginRight: 10,
+  },
+  heroTextWrap: {
+    flex: 1,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 4,
+    marginBottom: 3,
+    letterSpacing: -0.5,
   },
-  subtitle: {
+  heroSubtitle: {
     fontSize: 13,
     color: '#64748b',
-    marginBottom: 12,
-  },
-  calendarCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  calendarTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  monthNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  weekHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  weekdayText: {
-    width: `${100 / 7}%`,
-    textAlign: 'center',
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -2,
-  },
-  dayCellWrap: {
-    width: '14.2857%',
-    paddingHorizontal: 2,
-    paddingBottom: 4,
-  },
-  dayCellBlank: {
-    height: 44,
-  },
-  dayCell: {
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCellSelected: {
-    borderWidth: 2,
-    borderColor: '#2563eb',
-  },
-  dayText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  dotText: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  legendRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 11,
-    color: '#64748b',
-    marginLeft: 6,
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
@@ -622,11 +374,13 @@ const styles = StyleSheet.create({
   modalCard: {
     maxHeight: '78%',
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
   modalHeader: {
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     flexDirection: 'row',
@@ -642,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBody: {
-    padding: 12,
+    padding: 14,
   },
   detailsTitle: {
     fontSize: 15,
@@ -695,100 +449,5 @@ const styles = StyleSheet.create({
   emptyText: {
     marginBottom: 12,
     color: '#475569',
-  },
-  chartContainer: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 10,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  chartTitle: {
-    width: '100%',
-    fontSize: 13,
-    color: '#1e3a8a',
-    fontWeight: '700',
-    marginLeft: 8,
-    marginBottom: 2,
-  },
-  chart: {
-    borderRadius: 16,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 18,
-    alignItems: 'center',
-    marginHorizontal: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  insightContainer: {
-    backgroundColor: '#e0f2fe',
-    padding: 20,
-    borderRadius: 18,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0284c7',
-    marginBottom: 8,
-  },
-  insightTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 8,
-  },
-  insightText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 22,
-    flexWrap: 'wrap',
-    flexShrink: 1,
-  },
-  readMoreBtn: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    backgroundColor: '#f0f9ff',
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  readMoreText: {
-    marginRight: 6,
-    color: '#0369a1',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  fullInsightText: {
-    fontSize: 15,
-    color: '#334155',
-    lineHeight: 23,
   },
 });
