@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import { appAlert } from './appAlert';
 
 export async function openDirections({ latitude, longitude, address, label = 'Destination' } = {}) {
   let destination = '';
@@ -12,7 +13,7 @@ export async function openDirections({ latitude, longitude, address, label = 'De
   }
 
   if (!destination) {
-    Alert.alert('Missing location', 'This item does not have an address or coordinates.');
+    appAlert('Missing location', 'This item does not have an address or coordinates.', [{ text: 'OK' }], { variant: 'warning' });
     return;
   }
 
@@ -30,6 +31,6 @@ export async function openDirections({ latitude, longitude, address, label = 'De
     }
     await Linking.openURL(url);
   } catch {
-    Alert.alert('Unable to open maps', 'Please check your internet connection or try again.');
+    appAlert('Unable to open maps', 'Please check your internet connection or try again.', [{ text: 'OK' }], { variant: 'error' });
   }
 }

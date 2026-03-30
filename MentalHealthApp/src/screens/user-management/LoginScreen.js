@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, Image, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, Animated } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
+import { appAlert } from '../../lib/appAlert';
 
 
 
@@ -32,7 +33,7 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+      appAlert('Missing information', 'Please enter email and password', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
@@ -44,17 +45,17 @@ export default function LoginScreen({ navigation }) {
       });
 
       if (error) {
-        Alert.alert('Login failed', error.message);
+        appAlert('Login failed', error.message, [{ text: 'OK' }], { variant: 'error' });
         return;
       }
 
       if (data?.session) {
         navigation.replace('Main');
       } else {
-        Alert.alert('Login', 'Signed in, but no session was returned.');
+        appAlert('Login', 'Signed in, but no session was returned.', [{ text: 'OK' }], { variant: 'info' });
       }
     } catch (e) {
-      Alert.alert('Login failed', e?.message ?? 'Unexpected error');
+      appAlert('Login failed', e?.message ?? 'Unexpected error', [{ text: 'OK' }], { variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }

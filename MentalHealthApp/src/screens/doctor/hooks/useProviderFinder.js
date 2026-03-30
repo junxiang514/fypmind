@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { searchProviders } from '../../../lib/providers';
 import { getForegroundCoords } from '../../../lib/location';
@@ -87,28 +87,6 @@ export function useProviderFinder() {
     }
   };
 
-  useEffect(() => {
-    // Initial fetch: use GPS nearby by default.
-    (async () => {
-      try {
-        const nextCoords = await getForegroundCoords();
-        setCoords(nextCoords);
-        setUsingMyLocation(true);
-        setLocationWarning(null);
-        await runSearch({ coords: nextCoords });
-        return;
-      } catch (err) {
-        setLocationWarning(
-          err?.message
-            ? `Location unavailable: ${err.message}. Showing broader Malaysia results.`
-            : 'Location unavailable. Showing broader Malaysia results.'
-        );
-      }
-      await runSearch({ coords: null }, { keepExistingError: true });
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const refreshNearby = async () => {
     try {
       setLoading(true);
@@ -125,12 +103,12 @@ export function useProviderFinder() {
       setUsingMyLocation(false);
       setCoords(null);
       setError(null);
+      setProviders([]);
       setLocationWarning(
         err?.message
-          ? `${err.message} Showing broader Malaysia results.`
-          : 'Unable to use your current location. Showing broader Malaysia results.'
+          ? err.message
+          : 'Unable to use your current location.'
       );
-      await runSearch({ coords: null }, { keepExistingError: true });
     } finally {
       setLoading(false);
     }

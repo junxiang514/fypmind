@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 
 import { fetchEmergencyContact } from '../../lib/emergencyContacts';
 import { getForegroundCoords } from '../../lib/location';
+import { appAlert } from '../../lib/appAlert';
 
 export default function EmergencyScreen({ navigation }) {
   const isFocused = useIsFocused();
@@ -33,7 +34,7 @@ export default function EmergencyScreen({ navigation }) {
   const handleCall = async (number) => {
     const cleaned = (number || '').replace(/[^0-9+]/g, '');
     if (!cleaned) {
-      Alert.alert('Cannot place call', 'Phone number is not valid.');
+      appAlert('Cannot place call', 'Phone number is not valid.', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
@@ -42,24 +43,24 @@ export default function EmergencyScreen({ navigation }) {
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
-        Alert.alert('Cannot place call', 'Calling is not supported on this device.');
+        appAlert('Cannot place call', 'Calling is not supported on this device.', [{ text: 'OK' }], { variant: 'error' });
         return;
       }
       await Linking.openURL(url);
     } catch (err) {
-      Alert.alert('Cannot place call', 'Something went wrong while trying to start the call.');
+      appAlert('Cannot place call', 'Something went wrong while trying to start the call.', [{ text: 'OK' }], { variant: 'error' });
     }
   };
 
   const openWhatsAppToContact = async () => {
     if (!contact?.phone) {
-      Alert.alert('No emergency contact', 'Please set an emergency contact first.');
+      appAlert('No emergency contact', 'Please set an emergency contact first.', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
     const digitsOnly = contact.phone.replace(/[^0-9]/g, '');
     if (!digitsOnly) {
-      Alert.alert('Invalid phone number', 'Please update the emergency contact phone number.');
+      appAlert('Invalid phone number', 'Please update the emergency contact phone number.', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
@@ -93,12 +94,12 @@ export default function EmergencyScreen({ navigation }) {
         await Linking.openURL(waFallback);
       }
     } catch (err) {
-      Alert.alert('Unable to open WhatsApp', 'Please check that WhatsApp is installed and try again.');
+      appAlert('Unable to open WhatsApp', 'Please check that WhatsApp is installed and try again.', [{ text: 'OK' }], { variant: 'error' });
     }
   };
 
   const handleSOS = () => {
-    Alert.alert(
+    appAlert(
       'Emergency SOS',
       contact?.name
         ? `Send an SOS WhatsApp message to ${contact.name}?`
@@ -112,7 +113,8 @@ export default function EmergencyScreen({ navigation }) {
             openWhatsAppToContact();
           },
         },
-      ]
+      ],
+      { variant: 'warning' }
     );
   };
 

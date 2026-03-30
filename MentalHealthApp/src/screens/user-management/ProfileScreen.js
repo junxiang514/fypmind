@@ -177,7 +177,7 @@ export default function ProfileScreen({ navigation }) {
             {genderIconName ? (
               <Ionicons
                 name={genderIconName}
-                size={18}
+                size={20}
                 color={genderIconColor}
                 style={styles.genderIcon}
               />
@@ -188,6 +188,8 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Personal Information */}
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          {/* ...existing code... */}
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={20} color="#666" style={styles.infoIcon} />
@@ -233,6 +235,12 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* Medical Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Medical Information</Text>
+          {/* ...existing code... */}
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Ionicons name="medical-outline" size={20} color="#666" style={styles.infoIcon} />

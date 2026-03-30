@@ -101,7 +101,7 @@ export default function TrendGraphCard({ labels, overallSeries, loading = false 
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="small" color="#10b981" />
-            <Text style={styles.loadingText}>Loading analysis...</Text>
+            <Text style={styles.loadingText}>Loading Graph...</Text>
           </View>
         ) : (
           <LineChart

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
+import { appAlert } from '../../lib/appAlert';
 
 export default function RegistrationScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -15,12 +16,12 @@ export default function RegistrationScreen({ navigation }) {
     const trimmedEmail = email.trim();
 
     if (!trimmedName || !trimmedEmail || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      appAlert('Missing information', 'Please fill in all fields', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      appAlert('Password mismatch', 'Passwords do not match', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 
@@ -35,22 +36,23 @@ export default function RegistrationScreen({ navigation }) {
       });
 
       if (error) {
-        Alert.alert('Sign up failed', error.message);
+        appAlert('Sign up failed', error.message, [{ text: 'OK' }], { variant: 'error' });
         return;
       }
 
       // If email confirmation is enabled, session can be null.
       if (data?.session) {
-        Alert.alert('Success', 'Account created and signed in!', [
-          { text: 'OK', onPress: () => navigation.replace('Main') },
-        ]);
+        appAlert('Success', 'Account created and signed in!', [{ text: 'OK', onPress: () => navigation.replace('Main') }], { variant: 'success' });
       } else {
-        Alert.alert('Success', 'Account created. Please check your email to confirm your account.', [
-          { text: 'OK', onPress: () => navigation.navigate('Login') },
-        ]);
+        appAlert(
+          'Success',
+          'Account created. Please check your email to confirm your account.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login') }],
+          { variant: 'success' }
+        );
       }
     } catch (e) {
-      Alert.alert('Sign up failed', e?.message ?? 'Unexpected error');
+      appAlert('Sign up failed', e?.message ?? 'Unexpected error', [{ text: 'OK' }], { variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }

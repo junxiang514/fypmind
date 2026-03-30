@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -10,7 +10,8 @@ import {
 } from '../../lib/dailyAssessments';
 import TrendCalendarCard, { buildMonthCells } from './components/TrendCalendarCard';
 import TrendGraphCard from './components/TrendGraphCard';
-import TrendInsightCard from './components/TrendInsightCard';
+// import TrendInsightCard from './components/TrendInsightCard'; // Temporary hidden as requested
+import CalanderDetailsPopUp from './components/CalanderDetailsPopUp';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const INSIGHT_MODEL = 'gemini-3-flash-preview';
@@ -260,56 +261,16 @@ export default function EmotionalTrendScreen() {
 
         <TrendGraphCard labels={labels} overallSeries={overallSeries} loading={loading} />
 
-        <TrendInsightCard insightLoading={insightLoading} aiInsight={aiInsight} hasData={overallSeries.length > 0} />
+        {/* <TrendInsightCard insightLoading={insightLoading} aiInsight={aiInsight} hasData={overallSeries.length > 0} /> */}
       </ScrollView>
 
-      <Modal
+      <CalanderDetailsPopUp
         visible={!!selectedDate}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDetailsModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.detailsTitle}>
-                Answers on {selectedDate ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString() : ''}
-              </Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={closeDetailsModal}>
-                <Ionicons name="close" size={16} color="#334155" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.modalBody}>
-              {detailsLoading && (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator size="small" color="#007AFF" />
-                  <Text style={styles.loadingText}>Loading answers...</Text>
-                </View>
-              )}
-
-              {!detailsLoading && selectedEntries.length === 0 && (
-                <Text style={styles.emptyText}>No check-ins found for this date.</Text>
-              )}
-
-              {!detailsLoading && selectedEntries.map((entry, entryIndex) => (
-                <View key={entry.id} style={styles.entryBox}>
-                  <Text style={styles.entryTitle}>
-                    Check-in #{selectedEntries.length - entryIndex} • {new Date(entry.created_at).toLocaleTimeString()}
-                  </Text>
-
-                  {(entry.responses || []).map((answer, i) => (
-                    <View key={`${entry.id}-${i}`} style={styles.answerRow}>
-                      <Text style={styles.answerPrompt}>{answer.prompt}</Text>
-                      <Text style={styles.answerValue}>{answer.label || answer.value || '-'}</Text>
-                    </View>
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        selectedDate={selectedDate}
+        selectedEntries={selectedEntries}
+        detailsLoading={detailsLoading}
+        onClose={closeDetailsModal}
+      />
     </SafeAreaView>
   );
 }
@@ -364,83 +325,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     lineHeight: 18,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalCard: {
-    maxHeight: '78%',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-  },
-  modalHeader: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBody: {
-    padding: 14,
-  },
-  detailsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  entryBox: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-    backgroundColor: '#f8fafc',
-  },
-  entryTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1d4ed8',
-    marginBottom: 6,
-  },
-  answerRow: {
-    marginTop: 5,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 5,
-  },
-  answerPrompt: {
-    fontSize: 12,
-    color: '#334155',
-  },
-  answerValue: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  loadingText: {
-    marginLeft: 8,
-    color: '#64748b',
   },
   errorText: {
     marginBottom: 8,

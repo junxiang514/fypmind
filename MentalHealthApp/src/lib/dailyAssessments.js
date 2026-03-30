@@ -51,10 +51,23 @@ function toLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-export function buildRandomQuestionSet(allQuestions, count = 6) {
+export function buildRandomQuestionSet(allQuestions, count = 6, options = {}) {
   if (!Array.isArray(allQuestions) || !allQuestions.length) return [];
 
-  const byCategory = allQuestions.reduce((acc, q) => {
+  const preferredCategories = options?.preferredCategories;
+  const preferredSet = Array.isArray(preferredCategories) && preferredCategories.length
+    ? new Set(preferredCategories.map((x) => String(x).trim().toLowerCase()).filter(Boolean))
+    : null;
+
+  const withPreferredKey = (q) => String(q?.category || 'General').trim().toLowerCase();
+
+  const preferredPool = preferredSet
+    ? allQuestions.filter((q) => preferredSet.has(withPreferredKey(q)))
+    : [];
+
+  const primaryPool = preferredSet && preferredPool.length ? preferredPool : allQuestions;
+
+  const byCategory = primaryPool.reduce((acc, q) => {
     const key = String(q?.category || 'General').trim() || 'General';
     if (!acc[key]) acc[key] = [];
     acc[key].push(q);
@@ -72,6 +85,15 @@ export function buildRandomQuestionSet(allQuestions, count = 6) {
   // Fill remaining from all questions
   if (picked.length < count) {
     const usedIds = new Set(picked.map((x) => x.id));
+    const remaining = shuffle(primaryPool).filter((x) => !usedIds.has(x.id));
+    while (picked.length < count && remaining.length) {
+      picked.push(remaining.shift());
+    }
+  }
+
+  // If preferred categories didn't have enough questions, fill from the full bank.
+  if (picked.length < count) {
+    const usedIds = new Set(picked.map((x) => x.id));
     const remaining = shuffle(allQuestions).filter((x) => !usedIds.has(x.id));
     while (picked.length < count && remaining.length) {
       picked.push(remaining.shift());
@@ -82,6 +104,62 @@ export function buildRandomQuestionSet(allQuestions, count = 6) {
     ...q,
     options: Array.isArray(q?.options) && q.options.length ? q.options : DEFAULT_OPTIONS,
   }));
+}
+
+export async function getDailyAssessmentPreferences() {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User not authenticated');
+
+  const { data, error } = await supabase
+    .from('user_preferences')
+    .select('question_count, preferred_categories')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    if (shouldFallback(error)) return null;
+    throw error;
+  }
+
+  return {
+    questionCount: Number(data?.question_count) || null,
+    preferredCategories: Array.isArray(data?.preferred_categories) ? data.preferred_categories : null,
+  };
+}
+
+export async function saveDailyAssessmentPreferences({ questionCount, preferredCategories }) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('User not authenticated');
+
+  const normalizedCategories = Array.isArray(preferredCategories)
+    ? preferredCategories.map((x) => String(x).trim()).filter(Boolean)
+    : null;
+
+  const n = Number.parseInt(String(questionCount ?? 6), 10);
+  const clampedCount = Number.isFinite(n) ? Math.max(3, Math.min(12, n)) : 6;
+
+  const payload = {
+    user_id: userId,
+    question_count: clampedCount,
+    preferred_categories: normalizedCategories && normalizedCategories.length ? normalizedCategories : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('user_preferences')
+    .upsert(payload, { onConflict: 'user_id' })
+    .select('question_count, preferred_categories')
+    .single();
+
+  if (error) {
+    if (shouldFallback(error)) return null;
+    throw error;
+  }
+
+  return {
+    questionCount: Number(data?.question_count) || null,
+    preferredCategories: Array.isArray(data?.preferred_categories) ? data.preferred_categories : null,
+  };
 }
 
 export async function saveDailyAssessmentEntry({ moodScore, notes, questionSet, answersByQuestionId }) {

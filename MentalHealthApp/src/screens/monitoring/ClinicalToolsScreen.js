@@ -38,15 +38,29 @@ export default function ClinicalToolsScreen({ navigation }) {
 
   const renderItem = ({ item }) => {
     const isExpanded = !!expanded[item.id];
+    const duration = item.duration_minutes ? `${item.duration_minutes} mins` : 'Duration -';
+    const itemCount = item.item_count ? `${item.item_count} questions` : 'Questions -';
+    const condition = item.target_condition || 'General mental wellbeing';
+    const scale = item.scale_note || 'Standard Likert-based scale';
+    const administration = item.administration_note || 'Self-administered';
+    const interpretation = item.interpretation_guide || 'Review score ranges in context and consult a professional when needed.';
 
     return (
       <View style={styles.card}>
         <View style={styles.cardContent}>
-          <Text style={styles.toolName}>{item.name || item.code}</Text>
-          <Text style={styles.toolDescription}>{item.description}</Text>
-          <View style={styles.durationContainer}>
-            <Ionicons name="time-outline" size={14} color="#666" />
-            <Text style={styles.durationText}>{item.duration_minutes || '-'} mins</Text>
+          <Text style={styles.toolName}>{item.name || 'Clinical Tool'}</Text>
+          <Text style={styles.toolDescription}>{item.description || 'Standardized mental health screening tool.'}</Text>
+
+          <View style={styles.chipsRow}>
+            <View style={styles.metaChip}>
+              <Ionicons name="time-outline" size={14} color="#475569" />
+              <Text style={styles.metaChipText}>{duration}</Text>
+            </View>
+
+            <View style={styles.metaChip}>
+              <Ionicons name="list-outline" size={14} color="#475569" />
+              <Text style={styles.metaChipText}>{itemCount}</Text>
+            </View>
           </View>
         </View>
 
@@ -61,7 +75,7 @@ export default function ClinicalToolsScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.startButton}
-            onPress={() => navigation.navigate('ClinicalToolQuestionnaire', { toolId: item.id, toolName: item.name || item.code })}
+            onPress={() => navigation.navigate('ClinicalToolQuestionnaire', { toolId: item.id, toolName: item.name || 'Clinical Tool' })}
           >
             <Text style={styles.startButtonText}>Start</Text>
           </TouchableOpacity>
@@ -69,12 +83,39 @@ export default function ClinicalToolsScreen({ navigation }) {
 
         {isExpanded && (
           <View style={styles.detailsPanel}>
-            <Text style={styles.detailsTitle}>Tool details</Text>
-            <Text style={styles.detailsLine}>Condition: {item.target_condition || '-'}</Text>
-            <Text style={styles.detailsLine}>Questions: {item.item_count || '-'}</Text>
-            <Text style={styles.detailsLine}>Scale: {item.scale_note || '-'}</Text>
-            <Text style={styles.detailsLine}>Administration: {item.administration_note || '-'}</Text>
-            <Text style={styles.detailsLine}>Interpretation: {item.interpretation_guide || '-'}</Text>
+            <View style={styles.detailsHeaderRow}>
+              <Ionicons name="information-circle-outline" size={16} color="#0f172a" />
+              <Text style={styles.detailsTitle}>Tool details</Text>
+            </View>
+
+            <Text style={styles.detailsHint}>Quick reference before you start the questionnaire.</Text>
+
+            <View style={styles.detailsGrid}>
+              <View style={styles.detailItemCard}>
+                <Text style={styles.detailLabel}>Condition</Text>
+                <Text style={styles.detailValue}>{condition}</Text>
+              </View>
+
+              <View style={styles.detailItemCard}>
+                <Text style={styles.detailLabel}>Questions</Text>
+                <Text style={styles.detailValue}>{item.item_count || '-'}</Text>
+              </View>
+
+              <View style={styles.detailItemCard}>
+                <Text style={styles.detailLabel}>Scale</Text>
+                <Text style={styles.detailValue}>{scale}</Text>
+              </View>
+
+              <View style={styles.detailItemCard}>
+                <Text style={styles.detailLabel}>Administration</Text>
+                <Text style={styles.detailValue}>{administration}</Text>
+              </View>
+            </View>
+
+            <View style={styles.interpretationBox}>
+              <Ionicons name="analytics-outline" size={14} color="#1d4ed8" />
+              <Text style={styles.interpretationText}>{interpretation}</Text>
+            </View>
           </View>
         )}
       </View>
@@ -88,22 +129,48 @@ export default function ClinicalToolsScreen({ navigation }) {
         renderItem={renderItem}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <View style={styles.headerTopRow}>
-              <Text style={styles.headerTitle}>Clinical Tools</Text>
-              <TouchableOpacity
-                style={styles.historyIconButton}
-                onPress={() => navigation.navigate('ClinicalToolHistory')}
-              >
-                <Ionicons name="time-outline" size={16} color="#1d4ed8" />
-              </TouchableOpacity>
+          <View style={styles.headerWrap}>
+            <View style={styles.headerCard}>
+              <View style={styles.headerTopRow}>
+                <View>
+                  <Text style={styles.headerEyebrow}>Assessment Center</Text>
+                  <Text style={styles.headerTitle}>Clinical Tools</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.historyIconButton}
+                  onPress={() => navigation.navigate('ClinicalToolHistory')}
+                >
+                  <Ionicons name="time-outline" size={16} color="#1d4ed8" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.headerSubtitle}>Standardized assessments to help you understand your mental health.</Text>
+
+              <View style={styles.headerInfoRow}>
+                <View style={styles.headerInfoPill}>
+                  <Ionicons name="shield-checkmark-outline" size={14} color="#0f766e" />
+                  <Text style={styles.headerInfoText}>Evidence-based</Text>
+                </View>
+                <View style={styles.headerInfoPill}>
+                  <Ionicons name="sparkles-outline" size={14} color="#4338ca" />
+                  <Text style={styles.headerInfoText}>Quick Results</Text>
+                </View>
+              </View>
+
+              {!!error && <Text style={styles.errorText}>{error}</Text>}
+              {loading && <Text style={styles.loadingText}>Loading...</Text>}
             </View>
-            <Text style={styles.headerSubtitle}>Standardized assessments to help you understand your mental health.</Text>
-            {!!error && <Text style={styles.errorText}>{error}</Text>}
-            {loading && <Text style={styles.loadingText}>Loading...</Text>}
           </View>
         }
+        ListEmptyComponent={!loading ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="document-text-outline" size={22} color="#64748b" />
+            <Text style={styles.emptyTitle}>No clinical tools available</Text>
+            <Text style={styles.emptyText}>Please try again later.</Text>
+          </View>
+        ) : null}
       />
     </SafeAreaView>
   );
@@ -112,34 +179,79 @@ export default function ClinicalToolsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   listContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 28,
   },
-  header: {
-    marginBottom: 24,
+  headerWrap: {
+    marginBottom: 16,
+  },
+  headerCard: {
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
+    marginTop: 8,
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 21,
+  },
+  headerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  headerInfoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  headerInfoText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
   },
   historyIconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -148,13 +260,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
   cardContent: {
@@ -162,23 +276,37 @@ const styles = StyleSheet.create({
   },
   toolName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginBottom: 6,
   },
   toolDescription: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    color: '#475569',
+    marginBottom: 10,
+    lineHeight: 20,
   },
-  durationContainer: {
+  chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  durationText: {
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metaChipText: {
     fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
+    color: '#334155',
+    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
@@ -191,8 +319,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 11,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#bfdbfe',
     backgroundColor: '#eff6ff',
@@ -204,14 +332,19 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   startButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 10,
+    backgroundColor: '#2563eb',
+    paddingVertical: 11,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 10,
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   startButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '800',
     fontSize: 14,
   },
   detailsPanel: {
@@ -219,20 +352,67 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
+  },
+  detailsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   detailsTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 6,
   },
-  detailsLine: {
+  detailsHint: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 10,
+  },
+  detailsGrid: {
+    gap: 8,
+  },
+  detailItemCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  detailValue: {
     fontSize: 12,
     color: '#334155',
-    marginBottom: 4,
     lineHeight: 18,
+    fontWeight: '600',
+  },
+  interpretationBox: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  interpretationText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#1e3a8a',
   },
   errorText: {
     marginTop: 8,
@@ -243,5 +423,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#64748b',
     fontSize: 13,
+  },
+  emptyCard: {
+    marginTop: 8,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  emptyText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
   },
 });
