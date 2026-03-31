@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Activ
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { listMyClinicalToolResponses } from '../../lib/clinicalTools';
+import { getQuestionMetaByToolIds, listMyClinicalToolResponses } from '../../lib/clinicalTools';
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -116,6 +116,18 @@ function getRangeMeta(item) {
   return { label: 'Range unavailable', tone: 'neutral' };
 }
 
+function formatMark(value, digits = 2) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '-';
+  if (Math.abs(num - Math.round(num)) < 0.000001) return String(Math.round(num));
+  return num.toFixed(digits);
+}
+
+function toFiniteNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 function getRangeToneStyle(tone) {
   if (tone === 'good') return { bg: '#ecfdf5', border: '#86efac', text: '#166534' };
   if (tone === 'mild') return { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' };
@@ -125,10 +137,50 @@ function getRangeToneStyle(tone) {
   return { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155' };
 }
 
-export default function ClinicalToolHistoryScreen() {
+function getConditionTopic(code) {
+  if (code === 'PHQ9') return 'depression disorder';
+  if (code === 'GAD7') return 'anxiety disorder';
+  if (code === 'PHQ15') return 'somatic symptom disorder';
+  if (code === 'DASS21') return 'emotional distress';
+  if (code === 'WHO5') return 'reduced wellbeing';
+  if (code === 'PSS10') return 'high stress';
+  if (code === 'ISI') return 'insomnia disorder';
+  if (code === 'CBI') return 'burnout';
+  if (code === 'WHODAS12') return 'functional impairment';
+  return 'mental health concerns';
+}
+
+function buildInterpretationAdvice(code, tone) {
+  const topic = getConditionTopic(code);
+
+  if (code === 'WHO5') {
+    if (tone === 'good') return 'Your score suggests good wellbeing. Keep maintaining your healthy routine.';
+    if (tone === 'mild') return 'Your score suggests slight wellbeing decline. Monitor your mood and self-care this week.';
+    if (tone === 'moderate') return 'Your score suggests moderate wellbeing concerns. Consider support from a counselor.';
+    return 'Your score suggests significant wellbeing concerns. Please consult a mental health professional.';
+  }
+
+  if (tone === 'good') return `Your score suggests low likelihood of ${topic}.`;
+  if (tone === 'mild') return `Your score suggests mild ${topic} signs. Monitor and retake soon.`;
+  if (tone === 'moderate') return `Your score suggests moderate ${topic} signs. Consider discussing with a professional.`;
+  return `Your score suggests high chance of ${topic}. Please consult a professional for further evaluation.`;
+}
+
+function getChancePercentage(code, percentageOfFullMarks) {
+  if (!Number.isFinite(percentageOfFullMarks)) return null;
+  const isProtectiveScale = code === 'WHO5';
+  const chance = isProtectiveScale ? 100 - percentageOfFullMarks : percentageOfFullMarks;
+  return Math.max(0, Math.min(100, chance));
+}
+
+export default function ClinicalToolHistoryScreen({ navigation }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [questionTextMap, setQuestionTextMap] = useState({});
+  const [toolStatsMap, setToolStatsMap] = useState({});
+  const [questionMaxMap, setQuestionMaxMap] = useState({});
 
   const load = async () => {
     try {
@@ -136,9 +188,18 @@ export default function ClinicalToolHistoryScreen() {
       setError(null);
       const data = await listMyClinicalToolResponses();
       setRows(data);
+
+      const toolIds = Array.from(new Set((data || []).map((row) => row?.tool_id).filter(Boolean)));
+      const meta = await getQuestionMetaByToolIds(toolIds);
+      setQuestionTextMap(meta?.questionTextMap || {});
+      setToolStatsMap(meta?.toolStatsMap || {});
+      setQuestionMaxMap(meta?.questionMaxMap || {});
     } catch (err) {
       setError(err?.message || 'Failed to load report history.');
       setRows([]);
+      setQuestionTextMap({});
+      setToolStatsMap({});
+      setQuestionMaxMap({});
     } finally {
       setLoading(false);
     }
@@ -150,14 +211,73 @@ export default function ClinicalToolHistoryScreen() {
     }, [])
   );
 
+  const toggleExpand = (responseId) => {
+    setExpanded((prev) => ({
+      ...prev,
+      [responseId]: !prev[responseId],
+    }));
+  };
+
+  const getAnswerEntries = (rawAnswers) => {
+    if (!rawAnswers) return [];
+
+    let parsed = rawAnswers;
+    if (typeof rawAnswers === 'string') {
+      try {
+        parsed = JSON.parse(rawAnswers);
+      } catch (_) {
+        return [];
+      }
+    }
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((answer, idx) => {
+          const label = answer?.label ?? answer?.text ?? String(answer ?? '');
+          const value = toFiniteNumber(answer?.value ?? answer);
+          const questionLabel = `Q${idx + 1}`;
+          return { questionLabel, label, value, maxValue: null };
+        })
+        .filter((entry) => entry.label && entry.label !== '[object Object]');
+    }
+
+    if (typeof parsed === 'object') {
+      return Object.keys(parsed)
+        .map((key, idx) => {
+          const answer = parsed[key];
+          const label = answer?.label ?? answer?.text ?? String(answer ?? '');
+          const value = toFiniteNumber(answer?.value ?? answer);
+          const maxValue = toFiniteNumber(questionMaxMap[String(key)]);
+          const questionLabel = questionTextMap[String(key)] || `Q${idx + 1}`;
+          return { questionLabel, label, value, maxValue };
+        })
+        .filter((entry) => entry.label && entry.label !== '[object Object]');
+    }
+
+    return [];
+  };
+
   const renderItem = ({ item }) => {
     const tool = item?.clinical_tools || {};
+    const code = String(tool?.code || '').toUpperCase();
     const title = tool?.name || tool?.code || 'Assessment';
     const averageScore = getAverageScore(item);
-    const range = getRangeMeta(item);
-    const rangeToneStyle = getRangeToneStyle(range.tone);
     const createdAt = formatDateTime(item.created_at);
     const daysAgo = formatDaysAgo(item.created_at);
+    const isExpanded = !!expanded[item.id];
+    const answerEntries = getAnswerEntries(item.answers);
+    const fullMarks = Number(toolStatsMap[item.tool_id]?.fullMarks);
+    const hasFullMarks = Number.isFinite(fullMarks) && fullMarks > 0;
+    const totalScore = Number(item?.score);
+    const percentageOfFullMarks = Number.isFinite(totalScore) && hasFullMarks
+      ? (totalScore / fullMarks) * 100
+      : null;
+    const chancePercentage = getChancePercentage(code, percentageOfFullMarks);
+    const conditionTopic = getConditionTopic(code);
+    const range = getRangeMeta(item);
+    const rangeToneStyle = getRangeToneStyle(range.tone);
+    const interpretationAdvice = buildInterpretationAdvice(code, range.tone);
+    const shouldShowProviderButton = range.tone === 'severe' || range.tone === 'extreme';
 
     return (
       <View style={styles.card}>
@@ -172,24 +292,80 @@ export default function ClinicalToolHistoryScreen() {
         <View style={styles.row}>
           <View style={styles.badge}>
             <Ionicons name="analytics-outline" size={14} color="#1d4ed8" />
-            <Text style={styles.badgeText}>Total: {item.score ?? '-'}</Text>
+            <Text style={styles.badgeText}>Total Marks: {formatMark(totalScore)}{hasFullMarks ? ` / ${formatMark(fullMarks)}` : ''}</Text>
           </View>
 
           <View style={styles.badge}>
             <Ionicons name="calculator-outline" size={14} color="#0f766e" />
-            <Text style={styles.badgeText}>Avg: {Number.isFinite(averageScore) ? averageScore.toFixed(2) : '-'}</Text>
-          </View>
-
-          <View style={styles.badge}>
-            <Ionicons name="list-outline" size={14} color="#334155" />
-            <Text style={styles.badgeText}>Questions: {item.total_questions ?? '-'}</Text>
+            <Text style={styles.badgeText}>Average Score per Question: {formatMark(averageScore)}</Text>
           </View>
         </View>
 
-        <View style={[styles.rangeWrap, { backgroundColor: rangeToneStyle.bg, borderColor: rangeToneStyle.border }]}>
-          <Ionicons name="information-circle-outline" size={15} color={rangeToneStyle.text} />
-          <Text style={[styles.rangeText, { color: rangeToneStyle.text }]}>Range: {range.label}</Text>
+        <View
+          style={[
+            styles.rangeWrap,
+            {
+              backgroundColor: rangeToneStyle.bg,
+              borderColor: rangeToneStyle.border,
+              borderLeftColor: rangeToneStyle.text,
+            },
+          ]}
+        >
+          <View style={styles.rangeHeaderRow}>
+            <View style={styles.rangeTitleRow}>
+              <Ionicons name="information-circle-outline" size={15} color={rangeToneStyle.text} />
+              <Text style={[styles.rangeTitle, { color: rangeToneStyle.text }]}>Interpretation</Text>
+            </View>
+
+            {shouldShowProviderButton && (
+              <TouchableOpacity
+                style={styles.providerButton}
+                onPress={() => {
+                  navigation.navigate('Main', { screen: 'Doctors' });
+                }}
+              >
+                <Ionicons name="medkit-outline" size={14} color="#ffffff" />
+                <Text style={styles.providerButtonText}>Find A Health Care Providers</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={[styles.rangeText, { color: rangeToneStyle.text }]}>{range.label}</Text>
+          <Text style={[styles.rangeChanceText, { color: rangeToneStyle.text }]}>
+            {Number.isFinite(chancePercentage)
+              ? `~${chancePercentage.toFixed(1)}% chance of getting ${conditionTopic}`
+              : 'Chance unavailable'}
+          </Text>
+          <Text style={[styles.rangeAdviceText, { color: rangeToneStyle.text }]}>{interpretationAdvice}</Text>
         </View>
+
+        <TouchableOpacity style={styles.expandBtn} onPress={() => toggleExpand(item.id)}>
+          <Text style={styles.expandBtnText}>{isExpanded ? 'Hide answers' : 'View answers'}</Text>
+          <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color="#1d4ed8" />
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.answersPanel}>
+            <Text style={styles.answersTitle}>Your answers</Text>
+
+            {!answerEntries.length ? (
+              <Text style={styles.answersEmpty}>No answer details available for this submission.</Text>
+            ) : (
+              answerEntries.map((entry) => (
+                <View key={`${item.id}-${entry.questionLabel}`} style={styles.answerRow}>
+                  <Text style={styles.answerQuestion}>{entry.questionLabel}</Text>
+                  <Text style={styles.answerValue}>{entry.label}</Text>
+                  <Text style={styles.answerMarks}>
+                    Marks: {formatMark(entry.value)}
+                    {Number.isFinite(entry.maxValue)
+                      ? ` / ${formatMark(entry.maxValue)} (${formatMark((entry.value / entry.maxValue) * 100, 1)}%)`
+                      : ''}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        )}
       </View>
     );
   };
@@ -332,17 +508,121 @@ const styles = StyleSheet.create({
   },
   rangeWrap: {
     marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  rangeHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  rangeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  rangeTitle: {
+    fontWeight: '800',
+    fontSize: 12,
   },
   rangeText: {
-    marginLeft: 6,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 12,
+  },
+  rangeChanceText: {
+    marginTop: 3,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  rangeAdviceText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+  providerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1d4ed8',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  providerButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  expandBtn: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  expandBtnText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  answersPanel: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    gap: 8,
+  },
+  answersTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  answersEmpty: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  answerRow: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 9,
+  },
+  answerQuestion: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 3,
+  },
+  answerValue: {
+    fontSize: 13,
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  answerMarks: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
   },
   refreshBtn: {
     paddingHorizontal: 14,

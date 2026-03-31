@@ -1,15 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { listClinicalTools } from '../../lib/clinicalTools';
-
-import { useEffect, useState } from 'react';
+import { getClinicalToolsReminderPreference, setClinicalToolsReminderPreference } from '../../lib/clinicalToolsPreferences';
+import ClinicalToolsInfoModal from './components/ClinicalToolsInfoModal';
 
 export default function ClinicalToolsScreen({ navigation }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({});
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [savingPreference, setSavingPreference] = useState(false);
+  const [showDontRemindCheckbox, setShowDontRemindCheckbox] = useState(false);
+
+  const loadReminderPreference = async () => {
+    try {
+      const hideReminder = await getClinicalToolsReminderPreference();
+      if (!hideReminder) {
+        setShowDontRemindCheckbox(true);
+        setInfoModalVisible(true);
+      }
+    } catch (err) {
+      console.warn('Failed to load reminder preference', err);
+      setShowDontRemindCheckbox(true);
+      setInfoModalVisible(true);
+    }
+  };
 
   const load = async () => {
     try {
@@ -29,6 +47,12 @@ export default function ClinicalToolsScreen({ navigation }) {
     load();
   }, []);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      loadReminderPreference();
+    }, [])
+  );
+
   const toggleExpand = (toolId) => {
     setExpanded((prev) => ({
       ...prev,
@@ -36,13 +60,23 @@ export default function ClinicalToolsScreen({ navigation }) {
     }));
   };
 
+  const handleDontRemindAgain = async () => {
+    try {
+      setSavingPreference(true);
+      await setClinicalToolsReminderPreference(true);
+    } catch (err) {
+      console.warn('Failed to save preference', err);
+    } finally {
+      setSavingPreference(false);
+    }
+  };
+
   const renderItem = ({ item }) => {
     const isExpanded = !!expanded[item.id];
     const duration = item.duration_minutes ? `${item.duration_minutes} mins` : 'Duration -';
     const itemCount = item.item_count ? `${item.item_count} questions` : 'Questions -';
-    const condition = item.target_condition || 'General mental wellbeing';
-    const scale = item.scale_note || 'Standard Likert-based scale';
-    const administration = item.administration_note || 'Self-administered';
+    const focusArea = item.target_condition || 'General mental wellbeing';
+    const detailsIntro = item.details_intro || 'Standardized assessment to help you understand your mental health.';
     const interpretation = item.interpretation_guide || 'Review score ranges in context and consult a professional when needed.';
 
     return (
@@ -90,25 +124,19 @@ export default function ClinicalToolsScreen({ navigation }) {
 
             <Text style={styles.detailsHint}>Quick reference before you start the questionnaire.</Text>
 
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItemCard}>
-                <Text style={styles.detailLabel}>Condition</Text>
-                <Text style={styles.detailValue}>{condition}</Text>
+            <View style={styles.detailsIntroBox}>
+              <Ionicons name="bulb-outline" size={14} color="#1d4ed8" />
+              <View style={styles.detailsInfoContent}>
+                <Text style={styles.detailsInfoTitle}>Introduction</Text>
+                <Text style={styles.detailsIntroText}>{detailsIntro}</Text>
               </View>
+            </View>
 
-              <View style={styles.detailItemCard}>
-                <Text style={styles.detailLabel}>Questions</Text>
-                <Text style={styles.detailValue}>{item.item_count || '-'}</Text>
-              </View>
-
-              <View style={styles.detailItemCard}>
-                <Text style={styles.detailLabel}>Scale</Text>
-                <Text style={styles.detailValue}>{scale}</Text>
-              </View>
-
-              <View style={styles.detailItemCard}>
-                <Text style={styles.detailLabel}>Administration</Text>
-                <Text style={styles.detailValue}>{administration}</Text>
+            <View style={styles.detailsIntroBox}>
+              <Ionicons name="compass-outline" size={14} color="#1d4ed8" />
+              <View style={styles.detailsInfoContent}>
+                <Text style={styles.detailsInfoTitle}>Focus Area</Text>
+                <Text style={styles.detailsIntroText}>{focusArea}</Text>
               </View>
             </View>
 
@@ -138,12 +166,23 @@ export default function ClinicalToolsScreen({ navigation }) {
                   <Text style={styles.headerEyebrow}>Assessment Center</Text>
                   <Text style={styles.headerTitle}>Clinical Tools</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.historyIconButton}
-                  onPress={() => navigation.navigate('ClinicalToolHistory')}
-                >
-                  <Ionicons name="time-outline" size={16} color="#1d4ed8" />
-                </TouchableOpacity>
+                <View style={styles.headerIconsRow}>
+                  <TouchableOpacity
+                    style={styles.historyIconButton}
+                    onPress={() => {
+                      setShowDontRemindCheckbox(false);
+                      setInfoModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="information-circle-outline" size={16} color="#1d4ed8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.historyIconButton}
+                    onPress={() => navigation.navigate('ClinicalToolHistory')}
+                  >
+                    <Ionicons name="time-outline" size={16} color="#1d4ed8" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <Text style={styles.headerSubtitle}>Standardized assessments to help you understand your mental health.</Text>
@@ -171,6 +210,14 @@ export default function ClinicalToolsScreen({ navigation }) {
             <Text style={styles.emptyText}>Please try again later.</Text>
           </View>
         ) : null}
+      />
+
+      <ClinicalToolsInfoModal
+        visible={infoModalVisible}
+        onClose={() => setInfoModalVisible(false)}
+        onDontRemindAgain={handleDontRemindAgain}
+        loading={savingPreference}
+        showDontRemind={showDontRemindCheckbox}
       />
     </SafeAreaView>
   );
@@ -205,6 +252,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerEyebrow: {
     fontSize: 12,
@@ -395,6 +447,35 @@ const styles = StyleSheet.create({
     color: '#334155',
     lineHeight: 18,
     fontWeight: '600',
+  },
+  detailsIntroBox: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  detailsInfoContent: {
+    flex: 1,
+  },
+  detailsInfoTitle: {
+    fontSize: 11,
+    color: '#1e3a8a',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  detailsIntroText: {
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
+    fontWeight: '500',
   },
   interpretationBox: {
     marginTop: 10,

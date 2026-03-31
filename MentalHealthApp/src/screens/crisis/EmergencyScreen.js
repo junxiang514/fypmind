@@ -77,9 +77,12 @@ export default function EmergencyScreen({ navigation }) {
       : null;
 
     const lines = [
-      `Hi ${contact.name}, I am in an panic and need help!`,
-      contact?.name ? `Contact: ${contact.name} (${contact.relationship || 'Emergency contact'})` : undefined,
-      mapUrl ? `My current location: ${mapUrl}` : 'Location not available from the device.', '*This is an automated SOS message sent from the Mental Health App.'
+      '🚨 SOS Alert from MIND application',
+      `Hi ${contact.name}, I need urgent emotional support right now. Please check on me as soon as possible. 🙏`,
+      mapUrl ? `📍 My current location: ${mapUrl}` : '📍 I could not share my live location from this device.',
+      contact?.name ? `👤 Emergency contact: ${contact.name}${contact.relationship ? ` (${contact.relationship})` : ''}` : undefined,
+      '🤍 Thank you for being here for me.',
+      '*This is an automated SOS message from MIND application.*',
     ].filter(Boolean);
 
     const message = encodeURIComponent(lines.join('\n'));

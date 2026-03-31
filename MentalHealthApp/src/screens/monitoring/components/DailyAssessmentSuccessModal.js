@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-export default function DailyAssessmentSuccessModal({ visible, onClose }) {
+export default function DailyAssessmentSuccessModal({ visible, onClose, onViewInsight }) {
   return (
     <Modal visible={!!visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -29,8 +29,22 @@ export default function DailyAssessmentSuccessModal({ visible, onClose }) {
           </View>
 
           <View style={styles.footerRow}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={onClose} accessibilityRole="button" accessibilityLabel="Done">
-              <Text style={styles.primaryText}>Done</Text>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Questions"
+            >
+              <Text style={styles.secondaryText}>Back to Questions</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={onViewInsight || onClose}
+              accessibilityRole="button"
+              accessibilityLabel="View Insight"
+            >
+              <Text style={styles.primaryText}>View Insight</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -123,8 +137,26 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     marginTop: 6,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryText: {
+    color: '#1f2937',
+    fontWeight: '800',
+    fontSize: 14,
   },
   primaryBtn: {
+    flex: 1,
     borderRadius: 12,
     backgroundColor: '#2563eb',
     paddingVertical: 12,

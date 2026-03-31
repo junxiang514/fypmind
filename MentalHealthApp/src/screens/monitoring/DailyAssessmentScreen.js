@@ -354,6 +354,10 @@ export default function DailyAssessmentScreen({ navigation }) {
             setSuccessOpen(false);
             navigation.goBack();
           }}
+          onViewInsight={() => {
+            setSuccessOpen(false);
+            navigation.navigate('Main', { screen: 'Analysis' });
+          }}
         />
 
         <DailyAssessmentCustomizeModal

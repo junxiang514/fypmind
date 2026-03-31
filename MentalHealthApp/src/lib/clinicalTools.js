@@ -31,7 +31,7 @@ async function getCurrentUserId() {
 export async function listClinicalTools() {
   const fullQuery = await supabase
     .from('clinical_tools')
-    .select('id, code, name, description, duration_minutes, scale_note, target_condition, item_count, administration_note, interpretation_guide, is_active')
+    .select('id, code, name, description, duration_minutes, target_condition, item_count, details_intro, interpretation_guide, is_active')
     .eq('is_active', true)
     .order('code', { ascending: true });
 
@@ -39,7 +39,7 @@ export async function listClinicalTools() {
     if (hasMissingColumn(fullQuery.error)) {
       const baseQuery = await supabase
         .from('clinical_tools')
-        .select('id, code, name, description, duration_minutes, scale_note')
+        .select('id, code, name, description, duration_minutes, target_condition, item_count, details_intro, interpretation_guide')
         .order('code', { ascending: true });
 
       if (baseQuery.error) {
@@ -49,10 +49,10 @@ export async function listClinicalTools() {
 
       return (baseQuery.data || []).map((item) => ({
         ...item,
-        target_condition: null,
-        item_count: null,
-        administration_note: null,
-        interpretation_guide: null,
+        target_condition: item.target_condition ?? null,
+        item_count: item.item_count ?? null,
+        details_intro: item.details_intro ?? null,
+        interpretation_guide: item.interpretation_guide ?? null,
       }));
     }
 
@@ -114,7 +114,7 @@ export async function listMyClinicalToolResponses() {
 
   const { data, error } = await supabase
     .from('clinical_tool_responses')
-    .select('id, tool_id, score, total_questions, created_at, clinical_tools(name, code)')
+    .select('id, tool_id, answers, score, total_questions, created_at, clinical_tools(name, code)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -124,4 +124,85 @@ export async function listMyClinicalToolResponses() {
   }
 
   return data || [];
+}
+
+export async function getQuestionTextMapByToolIds(toolIds = []) {
+  const uniqueToolIds = Array.from(new Set((toolIds || []).filter(Boolean)));
+  if (!uniqueToolIds.length) return {};
+
+  const { data, error } = await supabase
+    .from('clinical_tool_questions')
+    .select('id, tool_id, question_order, question_text')
+    .in('tool_id', uniqueToolIds)
+    .order('tool_id', { ascending: true })
+    .order('question_order', { ascending: true });
+
+  if (error) {
+    if (shouldFallback(error)) return {};
+    throw error;
+  }
+
+  return (data || []).reduce((acc, row) => {
+    if (row?.id) {
+      acc[String(row.id)] = row.question_text || '';
+    }
+    return acc;
+  }, {});
+}
+
+export async function getQuestionMetaByToolIds(toolIds = []) {
+  const uniqueToolIds = Array.from(new Set((toolIds || []).filter(Boolean)));
+  if (!uniqueToolIds.length) return { questionTextMap: {}, questionMaxMap: {}, toolStatsMap: {} };
+
+  const { data, error } = await supabase
+    .from('clinical_tool_questions')
+    .select('id, tool_id, question_order, question_text, options')
+    .in('tool_id', uniqueToolIds)
+    .order('tool_id', { ascending: true })
+    .order('question_order', { ascending: true });
+
+  if (error) {
+    if (shouldFallback(error)) return { questionTextMap: {}, questionMaxMap: {}, toolStatsMap: {} };
+    throw error;
+  }
+
+  return (data || []).reduce(
+    (acc, row) => {
+      const rawOptions = row?.options;
+      let options = rawOptions;
+
+      if (typeof rawOptions === 'string') {
+        try {
+          options = JSON.parse(rawOptions);
+        } catch (_) {
+          options = [];
+        }
+      }
+
+      const maxOptionValue = Array.isArray(options)
+        ? options.reduce((max, opt) => {
+          const value = Number(opt?.value);
+          if (!Number.isFinite(value)) return max;
+          return Math.max(max, value);
+        }, 0)
+        : 0;
+
+      if (row?.id) {
+        acc.questionTextMap[String(row.id)] = row.question_text || '';
+        acc.questionMaxMap[String(row.id)] = maxOptionValue;
+      }
+
+      const toolId = row?.tool_id;
+      if (toolId) {
+        const current = acc.toolStatsMap[toolId] || { fullMarks: 0, questionCount: 0 };
+        acc.toolStatsMap[toolId] = {
+          fullMarks: current.fullMarks + maxOptionValue,
+          questionCount: current.questionCount + 1,
+        };
+      }
+
+      return acc;
+    },
+    { questionTextMap: {}, questionMaxMap: {}, toolStatsMap: {} }
+  );
 }
