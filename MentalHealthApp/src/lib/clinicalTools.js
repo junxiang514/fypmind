@@ -31,7 +31,7 @@ async function getCurrentUserId() {
 export async function listClinicalTools() {
   const fullQuery = await supabase
     .from('clinical_tools')
-    .select('id, code, name, description, duration_minutes, target_condition, item_count, details_intro, interpretation_guide, is_active')
+    .select('id, code, name, description, duration_minutes, target_condition, item_count, details_intro, interpretation_guide, source, is_active')
     .eq('is_active', true)
     .order('code', { ascending: true });
 
@@ -53,6 +53,7 @@ export async function listClinicalTools() {
         item_count: item.item_count ?? null,
         details_intro: item.details_intro ?? null,
         interpretation_guide: item.interpretation_guide ?? null,
+        source: null,
       }));
     }
 

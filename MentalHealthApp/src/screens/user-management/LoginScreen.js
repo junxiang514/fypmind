@@ -5,8 +5,6 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Imag
 import { supabase } from '../../lib/supabase';
 import { appAlert } from '../../lib/appAlert';
 
-
-
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +30,27 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      appAlert('Missing information', 'Please enter email and password', [{ text: 'OK' }], { variant: 'warning' });
+
+    // Email validation
+    if (!trimmedEmail) {
+      appAlert('Missing email', 'Please enter your email address', [{ text: 'OK' }], { variant: 'warning' });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      appAlert('Invalid email', 'Please enter a valid email address', [{ text: 'OK' }], { variant: 'warning' });
+      return;
+    }
+
+    // Password validation
+    if (!password) {
+      appAlert('Missing password', 'Please enter your password', [{ text: 'OK' }], { variant: 'warning' });
+      return;
+    }
+
+    if (password.length < 6) {
+      appAlert('Invalid password', 'Password must be at least 6 characters', [{ text: 'OK' }], { variant: 'warning' });
       return;
     }
 

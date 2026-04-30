@@ -6,6 +6,18 @@ import { listClinicalTools } from '../../lib/clinicalTools';
 import { getClinicalToolsReminderPreference, setClinicalToolsReminderPreference } from '../../lib/clinicalToolsPreferences';
 import ClinicalToolsInfoModal from './components/ClinicalToolsInfoModal';
 
+const TOOL_SOURCE_BY_CODE = {
+  PHQ9: 'Kroenke K, Spitzer RL, Williams JBW. The PHQ-9 (J Gen Intern Med, 2001).',
+  GAD7: 'Spitzer RL, Kroenke K, Williams JBW, Löwe B. The GAD-7 (Arch Intern Med, 2006).',
+  PHQ15: 'Kroenke K, Spitzer RL, Williams JBW. The PHQ-15 (J Psychosom Res, 2002).',
+  DASS21: 'Lovibond SH, Lovibond PF. Manual for the DASS (Psychology Foundation, 1995).',
+  WHO5: 'World Health Organization. WHO-5 Well-Being Index.',
+  PSS10: 'Cohen S, Kamarck T, Mermelstein R. Perceived Stress Scale (1983).',
+  ISI: 'Bastien CH, Vallières A, Morin CM. Insomnia Severity Index (Sleep Med, 2001).',
+  CBI: 'Kristensen TS, Borritz M, Villadsen E, Christensen KB. Copenhagen Burnout Inventory (2005).',
+  WHODAS12: 'World Health Organization. WHODAS 2.0 - 12 item version.',
+};
+
 export default function ClinicalToolsScreen({ navigation }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -78,6 +90,7 @@ export default function ClinicalToolsScreen({ navigation }) {
     const focusArea = item.target_condition || 'General mental wellbeing';
     const detailsIntro = item.details_intro || 'Standardized assessment to help you understand your mental health.';
     const interpretation = item.interpretation_guide || 'Review score ranges in context and consult a professional when needed.';
+    const source = item.source || TOOL_SOURCE_BY_CODE[item.code] || 'Source reference not available.';
 
     return (
       <View style={styles.card}>
@@ -143,6 +156,14 @@ export default function ClinicalToolsScreen({ navigation }) {
             <View style={styles.interpretationBox}>
               <Ionicons name="analytics-outline" size={14} color="#1d4ed8" />
               <Text style={styles.interpretationText}>{interpretation}</Text>
+            </View>
+
+            <View style={styles.sourceBox}>
+              <Ionicons name="library-outline" size={14} color="#7c3aed" />
+              <View style={styles.detailsInfoContent}>
+                <Text style={styles.sourceTitle}>Source</Text>
+                <Text style={styles.sourceText}>{source}</Text>
+              </View>
             </View>
           </View>
         )}
@@ -494,6 +515,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#1e3a8a',
+  },
+  sourceBox: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    backgroundColor: '#f5f3ff',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  sourceTitle: {
+    fontSize: 11,
+    color: '#5b21b6',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  sourceText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6d28d9',
   },
   errorText: {
     marginTop: 8,
