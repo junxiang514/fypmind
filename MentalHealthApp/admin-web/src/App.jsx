@@ -16,6 +16,7 @@ import WellbeingQuestionsEditor, {
 import ClinicalToolsEditor, { EMPTY_CLINICAL_TOOL } from './components/ClinicalToolsEditor';
 import AdminRecordList from './components/AdminRecordList';
 import AdminLoginPage from './components/AdminLoginPage';
+import AdminDashboardLayout from './components/AdminDashboardLayout';
 import {
   toInputDateTime,
   toIso,
@@ -808,138 +809,137 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="page">
-      <header className="topbar card">
-        <div>
-          <h2>Admin Dashboard</h2>
-          <p className="muted">Signed in as {signedInName}</p>
-        </div>
-        <div className="row">
-          <button className="btn light" onClick={loadAll}>Refresh</button>
-          <button className="btn danger" onClick={onLogout}>Logout</button>
-        </div>
-      </header>
+  const recordList = (
+    <AdminRecordList
+      tab={tab}
+      filteredEvents={filteredEvents}
+      filteredContents={filteredContents}
+      filteredUsers={filteredUsers}
+      filteredQuestions={filteredQuestions}
+      filteredClinicalTools={filteredClinicalTools}
+      selectedEventId={selectedEventId}
+      selectedContentId={selectedContentId}
+      selectedUserId={selectedUserId}
+      selectedQuestionId={selectedQuestionId}
+      selectedClinicalToolId={selectedClinicalToolId}
+      setSelectedEventId={setSelectedEventId}
+      setSelectedContentId={setSelectedContentId}
+      setSelectedUserId={setSelectedUserId}
+      setSelectedQuestionId={setSelectedQuestionId}
+      setSelectedClinicalToolId={setSelectedClinicalToolId}
+      clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
+      clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+      saving={saving}
+      toggleClinicalTool={toggleClinicalTool}
+    />
+  );
 
-      <section className="card controls">
-        <div className="tabs">
-          <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>Events</button>
-          <button className={`tab ${tab === 'contents' ? 'active' : ''}`} onClick={() => setTab('contents')}>Educational Content</button>
-          <button className={`tab ${tab === 'questions' ? 'active' : ''}`} onClick={() => setTab('questions')}>Daily Questions</button>
-          <button className={`tab ${tab === 'clinical-tools' ? 'active' : ''}`} onClick={() => setTab('clinical-tools')}>Self-Assessment Tools</button>
-          <button className={`tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>Users</button>
-        </div>
-        <input placeholder="Search current tab..." value={query} onChange={(e) => setQuery(e.target.value)} />
-      </section>
-
-      {!!status && <div className="banner ok">{status}</div>}
-      {!!error && <div className="banner error">{error}</div>}
-
-      <main className="layout">
-        <AdminRecordList
-          tab={tab}
-          filteredEvents={filteredEvents}
-          filteredContents={filteredContents}
-          filteredUsers={filteredUsers}
-          filteredQuestions={filteredQuestions}
-          filteredClinicalTools={filteredClinicalTools}
-          selectedEventId={selectedEventId}
-          selectedContentId={selectedContentId}
-          selectedUserId={selectedUserId}
-          selectedQuestionId={selectedQuestionId}
-          selectedClinicalToolId={selectedClinicalToolId}
-          setSelectedEventId={setSelectedEventId}
-          setSelectedContentId={setSelectedContentId}
-          setSelectedUserId={setSelectedUserId}
-          setSelectedQuestionId={setSelectedQuestionId}
-          setSelectedClinicalToolId={setSelectedClinicalToolId}
-          clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
-          clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+  const editorPanel = (
+    <div className="card form">
+      {tab === 'events' && (
+        <EventsEditor
+          eventForm={eventForm}
+          setEventForm={setEventForm}
           saving={saving}
-          toggleClinicalTool={toggleClinicalTool}
+          selectedEventId={selectedEventId}
+          onSave={saveEvent}
+          onDelete={deleteEvent}
+          onNew={() => {
+            setSelectedEventId(null);
+            setEventForm(EMPTY_EVENT);
+          }}
         />
+      )}
 
-        <div className="card form">
-          {tab === 'events' && (
-            <EventsEditor
-              eventForm={eventForm}
-              setEventForm={setEventForm}
-              saving={saving}
-              selectedEventId={selectedEventId}
-              onSave={saveEvent}
-              onDelete={deleteEvent}
-              onNew={() => {
-                setSelectedEventId(null);
-                setEventForm(EMPTY_EVENT);
-              }}
-            />
-          )}
+      {tab === 'contents' && (
+        <EducationalContentEditor
+          contentForm={contentForm}
+          setContentForm={setContentForm}
+          saving={saving}
+          selectedContentId={selectedContentId}
+          onSave={saveContent}
+          onDelete={deleteContent}
+          onNew={() => {
+            setSelectedContentId(null);
+            setContentForm(EMPTY_CONTENT);
+          }}
+        />
+      )}
 
-          {tab === 'contents' && (
-            <EducationalContentEditor
-              contentForm={contentForm}
-              setContentForm={setContentForm}
-              saving={saving}
-              selectedContentId={selectedContentId}
-              onSave={saveContent}
-              onDelete={deleteContent}
-              onNew={() => {
-                setSelectedContentId(null);
-                setContentForm(EMPTY_CONTENT);
-              }}
-            />
-          )}
+      {tab === 'users' && (
+        <UserEditor
+          userForm={userForm}
+          setUserForm={setUserForm}
+          saving={saving}
+          selectedUserId={selectedUserId}
+          onSave={saveUser}
+          onDelete={deleteUserProfile}
+        />
+      )}
 
-          {tab === 'users' && (
-            <UserEditor
-              userForm={userForm}
-              setUserForm={setUserForm}
-              saving={saving}
-              selectedUserId={selectedUserId}
-              onSave={saveUser}
-              onDelete={deleteUserProfile}
-            />
-          )}
+      {tab === 'questions' && (
+        <WellbeingQuestionsEditor
+          form={questionForm}
+          setForm={setQuestionForm}
+          saving={saving}
+          selectedId={selectedQuestionId}
+          onSave={saveQuestion}
+          onDelete={deleteQuestion}
+          onNew={() => {
+            setSelectedQuestionId(null);
+            setQuestionForm(EMPTY_WELLBEING_QUESTION);
+          }}
+        />
+      )}
 
-          {tab === 'questions' && (
-            <WellbeingQuestionsEditor
-              form={questionForm}
-              setForm={setQuestionForm}
-              saving={saving}
-              selectedId={selectedQuestionId}
-              onSave={saveQuestion}
-              onDelete={deleteQuestion}
-              onNew={() => {
-                setSelectedQuestionId(null);
-                setQuestionForm(EMPTY_WELLBEING_QUESTION);
-              }}
-            />
-          )}
-
-          {tab === 'clinical-tools' && (
-            <ClinicalToolsEditor
-              form={clinicalToolForm}
-              setForm={setClinicalToolForm}
-              saving={saving}
-              selectedId={selectedClinicalToolId}
-              questionCount={clinicalQuestionCountByToolId.get(String(selectedClinicalToolId || '')) || 0}
-              submissionCount={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.count || 0}
-              lastSubmissionAt={
-                clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.lastAt || null
-              }
-              onSave={saveClinicalTool}
-              questions={selectedToolQuestions}
-              selectedQuestionId={selectedToolQuestionId}
-              onSelectQuestion={setSelectedToolQuestionId}
-              questionForm={toolQuestionForm}
-              setQuestionForm={setToolQuestionForm}
-              onSaveQuestion={saveSelectedToolQuestion}
-            />
-          )}
-        </div>
-      </main>
-
-      {loading && <div className="loading">Loading...</div>}
+      {tab === 'clinical-tools' && (
+        <ClinicalToolsEditor
+          form={clinicalToolForm}
+          setForm={setClinicalToolForm}
+          saving={saving}
+          selectedId={selectedClinicalToolId}
+          questionCount={clinicalQuestionCountByToolId.get(String(selectedClinicalToolId || '')) || 0}
+          submissionCount={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.count || 0}
+          lastSubmissionAt={
+            clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.lastAt || null
+          }
+          onSave={saveClinicalTool}
+          questions={selectedToolQuestions}
+          selectedQuestionId={selectedToolQuestionId}
+          onSelectQuestion={setSelectedToolQuestionId}
+          questionForm={toolQuestionForm}
+          setQuestionForm={setToolQuestionForm}
+          onSaveQuestion={saveSelectedToolQuestion}
+        />
+      )}
     </div>
+  );
+
+  return (
+    <>
+      <AdminDashboardLayout
+        signedInName={signedInName}
+        onRefresh={() => loadAll()}
+        onLogout={onLogout}
+        tab={tab}
+        setTab={setTab}
+        query={query}
+        setQuery={setQuery}
+        status={status}
+        error={error}
+        kpis={{
+          events: events.length,
+          contents: contents.length,
+          questions: wellbeingQuestions.length,
+          tools: clinicalTools.length,
+          users: users.filter((user) => user?.is_active !== false).length,
+          submissions: clinicalResponses.length,
+        }}
+        list={recordList}
+        editor={editorPanel}
+        logoSrc={mindLogo}
+      />
+      {loading && <div className="loading">Loading...</div>}
+    </>
   );
 }
