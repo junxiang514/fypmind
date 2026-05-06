@@ -13,7 +13,25 @@ html, body { margin: 0; background: #f3f6fb; overflow: hidden; }
   place-content: center;
   gap: 12px;
   padding: 20px;
-  background: #fff;
+  position: relative;
+}
+.login-wrap .login-header,
+.login-wrap .card {
+  position: relative;
+  z-index: 1;
+}
+
+.login-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* use CSS variable set inline to reference the bundled image */
+  background-image: linear-gradient(rgba(255,255,255,0.9), rgba(255,255,255,0.9)), var(--login-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: brightness(1.02) saturate(0.96);
+  z-index: 0;
 }
 
 .login-header { text-align: center; }
@@ -29,7 +47,19 @@ html, body { margin: 0; background: #f3f6fb; overflow: hidden; }
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
-.login-card { width: min(420px, 95vw); display: grid; gap: 8px; }
+.login-card {
+  width: min(460px, 92vw);
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+}
+
+.login-card .login-header { text-align: center; }
+.login-card .logo { width: 120px; height: 120px; }
+.login-card h1 { margin: 8px 0 4px; font-size: 28px; }
+.login-card .login-header p { margin: 0 0 8px; font-size: 13px; color: #6b7280; }
+
+.login-form { display: grid; gap: 10px; }
 .login-card h2 { margin: 0; }
 
 .muted { color: #4f6072; margin-bottom: 8px; }
@@ -41,6 +71,34 @@ input, textarea, select {
   padding: 10px 12px;
   font-size: 14px;
   background: #f7fafd;
+}
+
+.password-input-wrap {
+  position: relative;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.password-toggle svg { display: block; width: 18px; height: 18px; }
+
+.password-toggle:hover {
+  background: rgba(0,0,0,0.04);
 }
 
 textarea { min-height: 90px; }
