@@ -24,27 +24,25 @@ as $$
   );
 $$;
 
--- 4) Enable RLS (safe if already enabled)
 alter table public.events enable row level security;
 alter table public.educational_contents enable row level security;
 alter table public.profiles enable row level security;
+alter table public.educational_content_progress enable row level security;
+alter table public.clinical_tool_responses enable row level security;
 
--- 5) Remove old permissive policies if needed (optional)
--- drop policy if exists "public read events" on public.events;
--- drop policy if exists "public read educational contents" on public.educational_contents;
 
--- Drop/recreate policies so this script can be run multiple times safely
 drop policy if exists "events public read" on public.events;
 drop policy if exists "educational public read" on public.educational_contents;
 drop policy if exists "profiles own read" on public.profiles;
 drop policy if exists "profiles own insert" on public.profiles;
 drop policy if exists "profiles admin read all" on public.profiles;
+drop policy if exists "educational progress admin read all" on public.educational_content_progress;
+drop policy if exists "clinical responses admin read all" on public.clinical_tool_responses;
 drop policy if exists "events admin write" on public.events;
 drop policy if exists "educational admin write" on public.educational_contents;
 drop policy if exists "profiles admin write" on public.profiles;
 drop policy if exists "profiles own update" on public.profiles;
 
--- 6) Read policies
 create policy "events public read"
 on public.events
 for select
@@ -65,7 +63,16 @@ on public.profiles
 for select
 using (public.is_admin(auth.uid()));
 
--- 7) Admin write policies
+create policy "educational progress admin read all"
+on public.educational_content_progress
+for select
+using (public.is_admin(auth.uid()));
+
+create policy "clinical responses admin read all"
+on public.clinical_tool_responses
+for select
+using (public.is_admin(auth.uid()));
+
 create policy "events admin write"
 on public.events
 for all
@@ -84,7 +91,6 @@ for all
 using (public.is_admin(auth.uid()))
 with check (public.is_admin(auth.uid()));
 
--- 8) User self-update policy (keep personal profile editable)
 create policy "profiles own update"
 on public.profiles
 for update

@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase, supabaseInitError, publicReadClient } from './lib/supabase';
 import mindLogo from '../../assets/MindAppLogo.png';
+import AdminDashboardContent from './components/AdminDashboardContent';
+import AdminLoginPage from './components/AdminLoginPage';
+import AdminDashboardLayout from './components/AdminDashboardLayout';
 import EventsEditor, { EMPTY_EVENT } from './components/EventsEditor';
 import EducationalContentEditor, {
   EMPTY_CONTENT,
@@ -14,9 +17,6 @@ import WellbeingQuestionsEditor, {
   serializeOptions,
 } from './components/WellbeingQuestionsEditor';
 import ClinicalToolsEditor, { EMPTY_CLINICAL_TOOL } from './components/ClinicalToolsEditor';
-import AdminRecordList from './components/AdminRecordList';
-import AdminLoginPage from './components/AdminLoginPage';
-import AdminDashboardLayout from './components/AdminDashboardLayout';
 import {
   toInputDateTime,
   toIso,
@@ -36,7 +36,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [tab, setTab] = useState('events');
+  const [tab, setTab] = useState('dashboard');
   const [query, setQuery] = useState('');
 
   const [events, setEvents] = useState([]);
@@ -46,6 +46,7 @@ export default function App() {
   const [clinicalTools, setClinicalTools] = useState([]);
   const [clinicalQuestions, setClinicalQuestions] = useState([]);
   const [clinicalResponses, setClinicalResponses] = useState([]);
+  const [educationalProgressRows, setEducationalProgressRows] = useState([]);
 
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [selectedContentId, setSelectedContentId] = useState(null);
@@ -93,7 +94,7 @@ export default function App() {
     setLoading(true);
     setError('');
     try {
-      const [eventsRes, contentsRes, usersRes, questionsRes, toolsRes, clinicalQuestionsRes, responsesRes] = await Promise.allSettled([
+      const [eventsRes, contentsRes, usersRes, questionsRes, toolsRes, clinicalQuestionsRes, responsesRes, educationalProgressRes] = await Promise.allSettled([
         (publicReadClient || supabase)
           .from('events')
           .select('id, title, description, detailed_description, objective, agenda, category, start_at, end_at, location, address, fee, location_link, image_urls, created_at')
@@ -124,11 +125,16 @@ export default function App() {
           .order('tool_id', { ascending: true })
           .order('question_order', { ascending: true })
           .limit(5000),
-        (publicReadClient || supabase)
+        supabase
           .from('clinical_tool_responses')
           .select('id, tool_id, answers, created_at')
           .order('created_at', { ascending: false })
           .limit(10000),
+        supabase
+          .from('educational_content_progress')
+          .select('content_id, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(20000),
       ]);
 
       const nextEvents = eventsRes.status === 'fulfilled' ? (eventsRes.value.data || []) : [];
@@ -138,6 +144,7 @@ export default function App() {
       const nextTools = toolsRes.status === 'fulfilled' ? (toolsRes.value.data || []) : [];
       const nextClinicalQuestions = clinicalQuestionsRes.status === 'fulfilled' ? (clinicalQuestionsRes.value.data || []) : [];
       const nextResponses = responsesRes.status === 'fulfilled' ? (responsesRes.value.data || []) : [];
+      const nextEducationalProgress = educationalProgressRes.status === 'fulfilled' ? (educationalProgressRes.value.data || []) : [];
 
       const eventsError = eventsRes.status === 'fulfilled' ? eventsRes.value.error : eventsRes.reason;
       const contentsError = contentsRes.status === 'fulfilled' ? contentsRes.value.error : contentsRes.reason;
@@ -146,6 +153,9 @@ export default function App() {
       const toolsError = toolsRes.status === 'fulfilled' ? toolsRes.value.error : toolsRes.reason;
       const clinicalQuestionsError = clinicalQuestionsRes.status === 'fulfilled' ? clinicalQuestionsRes.value.error : clinicalQuestionsRes.reason;
       const responsesError = responsesRes.status === 'fulfilled' ? responsesRes.value.error : responsesRes.reason;
+      const educationalProgressError = educationalProgressRes.status === 'fulfilled'
+        ? educationalProgressRes.value.error
+        : educationalProgressRes.reason;
 
       if (eventsError) {
         throw new Error(
@@ -210,6 +220,12 @@ export default function App() {
           'Unable to load self-assessment submission records. Add admin read policy for clinical_tool_responses.'
         );
       }
+      if (educationalProgressError) {
+        setError(
+          educationalProgressError?.message ||
+          'Unable to load educational content submission records right now.'
+        );
+      }
 
       const normalizedUsers = [...nextUsers];
       if (currentUser?.id && !normalizedUsers.some((u) => String(u.id) === String(currentUser.id))) {
@@ -223,6 +239,7 @@ export default function App() {
       setClinicalTools(nextTools);
       setClinicalQuestions(normalizedClinicalQuestions);
       setClinicalResponses(nextResponses);
+      setEducationalProgressRows(nextEducationalProgress);
 
       if (!selectedEventId && nextEvents.length) setSelectedEventId(nextEvents[0].id);
       if (!selectedContentId && nextContents.length) setSelectedContentId(nextContents[0].id);
@@ -277,12 +294,14 @@ export default function App() {
     setClinicalTools([]);
     setClinicalQuestions([]);
     setClinicalResponses([]);
+    setEducationalProgressRows([]);
     setSelectedEventId(null);
     setSelectedContentId(null);
     setSelectedUserId(null);
     setSelectedQuestionId(null);
     setSelectedClinicalToolId(null);
     setSelectedToolQuestionId(null);
+    setTab('dashboard');
     setStatus('Logged out.');
   }
 
@@ -340,6 +359,53 @@ export default function App() {
     }
     return stats;
   }, [clinicalQuestions]);
+
+  const toolSubmissionChartData = useMemo(() => {
+    return clinicalTools
+      .map((tool) => ({
+        id: tool.id,
+        label: tool.code || tool.name || 'Unknown tool',
+        count: clinicalSubmissionStatsByToolId.get(String(tool.id))?.count || 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [clinicalTools, clinicalSubmissionStatsByToolId]);
+
+  const topEducationalContentBySubmissions = useMemo(() => {
+    const countByContentId = new Map();
+    for (const row of educationalProgressRows) {
+      const contentId = String(row?.content_id || '');
+      if (!contentId) continue;
+      countByContentId.set(contentId, (countByContentId.get(contentId) || 0) + 1);
+    }
+
+    return contents
+      .map((content) => ({
+        id: content.id,
+        title: content.title || 'Untitled content',
+        count: countByContentId.get(String(content.id)) || 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [contents, educationalProgressRows]);
+
+  const newUsersThisMonth = useMemo(() => {
+    const now = new Date();
+    const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    return users.filter((user) => {
+      const createdAt = new Date(user.created_at || 0);
+      return createdAt >= oneMonthAgo && createdAt <= now;
+    }).length;
+  }, [users]);
+
+  const dashboardKpis = {
+    events: events.length,
+    contents: contents.length,
+    questions: wellbeingQuestions.length,
+    tools: clinicalTools.length,
+    users: users.filter((user) => user?.is_active !== false).length,
+    submissions: clinicalResponses.length,
+    newUsersThisMonth: newUsersThisMonth,
+  };
 
   const selectedEvent = events.find((x) => x.id === selectedEventId) || null;
   const selectedContent = contents.find((x) => x.id === selectedContentId) || null;
@@ -809,112 +875,6 @@ export default function App() {
     );
   }
 
-  const recordList = (
-    <AdminRecordList
-      tab={tab}
-      filteredEvents={filteredEvents}
-      filteredContents={filteredContents}
-      filteredUsers={filteredUsers}
-      filteredQuestions={filteredQuestions}
-      filteredClinicalTools={filteredClinicalTools}
-      selectedEventId={selectedEventId}
-      selectedContentId={selectedContentId}
-      selectedUserId={selectedUserId}
-      selectedQuestionId={selectedQuestionId}
-      selectedClinicalToolId={selectedClinicalToolId}
-      setSelectedEventId={setSelectedEventId}
-      setSelectedContentId={setSelectedContentId}
-      setSelectedUserId={setSelectedUserId}
-      setSelectedQuestionId={setSelectedQuestionId}
-      setSelectedClinicalToolId={setSelectedClinicalToolId}
-      clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
-      clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
-      saving={saving}
-      toggleClinicalTool={toggleClinicalTool}
-    />
-  );
-
-  const editorPanel = (
-    <div className="card form">
-      {tab === 'events' && (
-        <EventsEditor
-          eventForm={eventForm}
-          setEventForm={setEventForm}
-          saving={saving}
-          selectedEventId={selectedEventId}
-          onSave={saveEvent}
-          onDelete={deleteEvent}
-          onNew={() => {
-            setSelectedEventId(null);
-            setEventForm(EMPTY_EVENT);
-          }}
-        />
-      )}
-
-      {tab === 'contents' && (
-        <EducationalContentEditor
-          contentForm={contentForm}
-          setContentForm={setContentForm}
-          saving={saving}
-          selectedContentId={selectedContentId}
-          onSave={saveContent}
-          onDelete={deleteContent}
-          onNew={() => {
-            setSelectedContentId(null);
-            setContentForm(EMPTY_CONTENT);
-          }}
-        />
-      )}
-
-      {tab === 'users' && (
-        <UserEditor
-          userForm={userForm}
-          setUserForm={setUserForm}
-          saving={saving}
-          selectedUserId={selectedUserId}
-          onSave={saveUser}
-          onDelete={deleteUserProfile}
-        />
-      )}
-
-      {tab === 'questions' && (
-        <WellbeingQuestionsEditor
-          form={questionForm}
-          setForm={setQuestionForm}
-          saving={saving}
-          selectedId={selectedQuestionId}
-          onSave={saveQuestion}
-          onDelete={deleteQuestion}
-          onNew={() => {
-            setSelectedQuestionId(null);
-            setQuestionForm(EMPTY_WELLBEING_QUESTION);
-          }}
-        />
-      )}
-
-      {tab === 'clinical-tools' && (
-        <ClinicalToolsEditor
-          form={clinicalToolForm}
-          setForm={setClinicalToolForm}
-          saving={saving}
-          selectedId={selectedClinicalToolId}
-          questionCount={clinicalQuestionCountByToolId.get(String(selectedClinicalToolId || '')) || 0}
-          submissionCount={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.count || 0}
-          lastSubmissionAt={
-            clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.lastAt || null
-          }
-          onSave={saveClinicalTool}
-          questions={selectedToolQuestions}
-          selectedQuestionId={selectedToolQuestionId}
-          onSelectQuestion={setSelectedToolQuestionId}
-          questionForm={toolQuestionForm}
-          setQuestionForm={setToolQuestionForm}
-          onSaveQuestion={saveSelectedToolQuestion}
-        />
-      )}
-    </div>
-  );
-
   return (
     <>
       <AdminDashboardLayout
@@ -927,16 +887,59 @@ export default function App() {
         setQuery={setQuery}
         status={status}
         error={error}
-        kpis={{
-          events: events.length,
-          contents: contents.length,
-          questions: wellbeingQuestions.length,
-          tools: clinicalTools.length,
-          users: users.filter((user) => user?.is_active !== false).length,
-          submissions: clinicalResponses.length,
-        }}
-        list={recordList}
-        editor={editorPanel}
+        content={(
+          <AdminDashboardContent
+            tab={tab}
+            setTab={setTab}
+            kpis={dashboardKpis}
+            saving={saving}
+            filteredEvents={filteredEvents}
+            filteredContents={filteredContents}
+            filteredUsers={filteredUsers}
+            filteredQuestions={filteredQuestions}
+            filteredClinicalTools={filteredClinicalTools}
+            toolSubmissionChartData={toolSubmissionChartData}
+            topEducationalContentBySubmissions={topEducationalContentBySubmissions}
+            selectedEventId={selectedEventId}
+            selectedContentId={selectedContentId}
+            selectedUserId={selectedUserId}
+            selectedQuestionId={selectedQuestionId}
+            selectedClinicalToolId={selectedClinicalToolId}
+            setSelectedEventId={setSelectedEventId}
+            setSelectedContentId={setSelectedContentId}
+            setSelectedUserId={setSelectedUserId}
+            setSelectedQuestionId={setSelectedQuestionId}
+            setSelectedClinicalToolId={setSelectedClinicalToolId}
+            clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
+            clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+            toggleClinicalTool={toggleClinicalTool}
+            eventForm={eventForm}
+            setEventForm={setEventForm}
+            saveEvent={saveEvent}
+            deleteEvent={deleteEvent}
+            contentForm={contentForm}
+            setContentForm={setContentForm}
+            saveContent={saveContent}
+            deleteContent={deleteContent}
+            userForm={userForm}
+            setUserForm={setUserForm}
+            saveUser={saveUser}
+            deleteUserProfile={deleteUserProfile}
+            questionForm={questionForm}
+            setQuestionForm={setQuestionForm}
+            saveQuestion={saveQuestion}
+            deleteQuestion={deleteQuestion}
+            clinicalToolForm={clinicalToolForm}
+            setClinicalToolForm={setClinicalToolForm}
+            saveClinicalTool={saveClinicalTool}
+            selectedToolQuestions={selectedToolQuestions}
+            selectedToolQuestionId={selectedToolQuestionId}
+            setSelectedToolQuestionId={setSelectedToolQuestionId}
+            toolQuestionForm={toolQuestionForm}
+            setToolQuestionForm={setToolQuestionForm}
+            saveSelectedToolQuestion={saveSelectedToolQuestion}
+          />
+        )}
         logoSrc={mindLogo}
       />
       {loading && <div className="loading">Loading...</div>}

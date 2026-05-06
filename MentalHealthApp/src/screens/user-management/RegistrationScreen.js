@@ -96,7 +96,7 @@ export default function RegistrationScreen({ navigation }) {
         setEmailExists(false);
       }
     } catch (error) {
-      console.log('Email check completed');
+      // Email existence check failed silently
     }
   };
 

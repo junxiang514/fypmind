@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'events', label: 'Events' },
   { key: 'contents', label: 'Educational Content' },
   { key: 'questions', label: 'Daily Questions' },
@@ -29,9 +30,7 @@ export default function AdminDashboardLayout({
   setQuery,
   status,
   error,
-  kpis,
-  list,
-  editor,
+  content,
   logoSrc,
 }) {
   const [showAlert, setShowAlert] = useState(true);
@@ -67,7 +66,7 @@ export default function AdminDashboardLayout({
         </div>
 
         <nav className="admin-nav">
-          <div className="admin-nav-title">Manage</div>
+          <div className="admin-nav-divider" aria-hidden="true" />
           {NAV_ITEMS.map((item) => (
             <button
               key={item.key}
@@ -78,57 +77,6 @@ export default function AdminDashboardLayout({
             </button>
           ))}
         </nav>
-
-        <details className="card admin-kpi-panel">
-          <summary className="admin-kpi-summary">
-            KPI Snapshot
-            <span className="admin-kpi-hint">Expand to view details</span>
-          </summary>
-          <div className="admin-kpi-list">
-            <div className="admin-kpi-item">
-              <div>
-                <span>Events</span>
-                <div className="admin-kpi-meta">Upcoming & past sessions</div>
-              </div>
-              <strong>{kpis.events}</strong>
-            </div>
-            <div className="admin-kpi-item">
-              <div>
-                <span>Educational Content</span>
-                <div className="admin-kpi-meta">Articles, quizzes, activities</div>
-              </div>
-              <strong>{kpis.contents}</strong>
-            </div>
-            <div className="admin-kpi-item">
-              <div>
-                <span>Daily Questions</span>
-                <div className="admin-kpi-meta">Wellbeing check-ins</div>
-              </div>
-              <strong>{kpis.questions}</strong>
-            </div>
-            <div className="admin-kpi-item">
-              <div>
-                <span>Self-Assessment Tools</span>
-                <div className="admin-kpi-meta">Clinical questionnaires</div>
-              </div>
-              <strong>{kpis.tools}</strong>
-            </div>
-            <div className="admin-kpi-item">
-              <div>
-                <span>Users</span>
-                <div className="admin-kpi-meta">Active profiles</div>
-              </div>
-              <strong>{kpis.users}</strong>
-            </div>
-            <div className="admin-kpi-item">
-              <div>
-                <span>Submissions</span>
-                <div className="admin-kpi-meta">Self-assessment responses</div>
-              </div>
-              <strong>{kpis.submissions}</strong>
-            </div>
-          </div>
-        </details>
 
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-actions">
@@ -159,7 +107,7 @@ export default function AdminDashboardLayout({
                   onClick={() => setShowAlert(!showAlert)}
                   title={error || status}
                 >
-                  <span className="alert-icon">{error ? '⚠' : 'ℹ'}</span>
+                  <span className="alert-icon">{error ? '⚠' : '🔔'}</span>
                 </button>
                 {showAlert && (
                   <div className={`alert-tooltip ${error ? 'error' : 'success'}`}>
@@ -178,10 +126,7 @@ export default function AdminDashboardLayout({
           </div>
         </header>
 
-        <section className="admin-content">
-          <div className="admin-panel card">{list}</div>
-          <div className="admin-panel">{editor}</div>
-        </section>
+        {content}
       </main>
     </div>
   );
