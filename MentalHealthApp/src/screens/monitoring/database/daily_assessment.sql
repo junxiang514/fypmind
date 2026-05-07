@@ -43,22 +43,8 @@ do $$ begin
   create policy "admin manage wellbeing questions"
   on public.wellbeing_questions
   for all
-  using (
-    exists (
-      select 1
-      from public.profiles p
-      where p.id = auth.uid()
-        and (coalesce(p.is_admin, false) = true or lower(coalesce(p.role, '')) = 'admin')
-    )
-  )
-  with check (
-    exists (
-      select 1
-      from public.profiles p
-      where p.id = auth.uid()
-        and (coalesce(p.is_admin, false) = true or lower(coalesce(p.role, '')) = 'admin')
-    )
-  );
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
 exception when duplicate_object then null; end $$;
 
 do $$ begin

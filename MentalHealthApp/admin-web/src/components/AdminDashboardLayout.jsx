@@ -4,7 +4,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'events', label: 'Events' },
   { key: 'contents', label: 'Educational Content' },
-  { key: 'questions', label: 'Daily Questions' },
+  { key: 'questions', label: 'Check-ins Question' },
   { key: 'clinical-tools', label: 'Self-Assessment Tools' },
   { key: 'users', label: 'Users' },
 ];

@@ -177,6 +177,13 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
+  create policy "public read all feedback"
+  on public.educational_content_feedback
+  for select
+  using (true);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
   create policy "users can insert own feedback"
   on public.educational_content_feedback
   for insert
@@ -220,6 +227,8 @@ alter table public.events add column if not exists agenda text;
 alter table public.events add column if not exists fee text;
 alter table public.events add column if not exists location_link text;
 alter table public.events add column if not exists image_urls jsonb;
+alter table public.events add column if not exists latitude double precision;
+alter table public.events add column if not exists longitude double precision;
 
 alter table public.events enable row level security;
 

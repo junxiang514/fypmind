@@ -49,10 +49,15 @@ export default function App() {
   const [educationalProgressRows, setEducationalProgressRows] = useState([]);
 
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState(null);
+  const [isEditingContent, setIsEditingContent] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [isEditingUser, setIsEditingUser] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+  const [isEditingQuestion, setIsEditingQuestion] = useState(false);
   const [selectedClinicalToolId, setSelectedClinicalToolId] = useState(null);
+  const [isEditingClinicalTool, setIsEditingClinicalTool] = useState(false);
   const [selectedToolQuestionId, setSelectedToolQuestionId] = useState(null);
 
   const signedInName =
@@ -424,6 +429,7 @@ export default function App() {
   );
 
   const [eventForm, setEventForm] = useState(EMPTY_EVENT);
+  const [eventFormErrors, setEventFormErrors] = useState({});
   const [contentForm, setContentForm] = useState(EMPTY_CONTENT);
   const [userForm, setUserForm] = useState(null);
   const [questionForm, setQuestionForm] = useState(EMPTY_WELLBEING_QUESTION);
@@ -437,6 +443,7 @@ export default function App() {
   useEffect(() => {
     if (!selectedEvent) {
       setEventForm(EMPTY_EVENT);
+      setEventFormErrors({});
       return;
     }
     setEventForm({
@@ -450,10 +457,11 @@ export default function App() {
       end_at: toInputDateTime(selectedEvent.end_at),
       location: selectedEvent.location || '',
       address: selectedEvent.address || '',
-      fee: selectedEvent.fee || '',
+      fee: selectedEvent.fee ?? '',
       location_link: selectedEvent.location_link || '',
       image_urls_text: Array.isArray(selectedEvent.image_urls) ? selectedEvent.image_urls.join('\n') : '',
     });
+    setEventFormErrors({});
   }, [selectedEventId, events]);
 
   useEffect(() => {
@@ -544,9 +552,53 @@ export default function App() {
     });
   }, [selectedToolQuestion]);
 
+  function collectEventValidationErrors(form) {
+    const issues = {};
+    const title = String(form?.title || '').trim();
+    const startAt = String(form?.start_at || '').trim();
+    const endAt = String(form?.end_at || '').trim();
+    const location = String(form?.location || '').trim();
+    const locationLink = String(form?.location_link || '').trim();
+
+    if (!title) issues.title = 'Event title is required.';
+    if (!startAt) issues.start_at = 'Start date/time is required.';
+    if (!endAt) issues.end_at = 'End date/time is required.';
+    if (!location) issues.location = 'Location is required.';
+    if (!locationLink) {
+      issues.location_link = 'Location link is required (single navigation source).';
+    }
+
+    if (startAt && endAt) {
+      const startDate = new Date(startAt);
+      const endDate = new Date(endAt);
+      if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate < startDate) {
+        issues.end_at = 'End date/time must be after start date/time.';
+      }
+    }
+
+    if (locationLink) {
+      try {
+        const parsed = new URL(locationLink);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          issues.location_link = 'Location link must start with http:// or https://.';
+        }
+      } catch {
+        issues.location_link = 'Location link must be a valid URL.';
+      }
+    }
+
+    return issues;
+  }
+
   async function saveEvent() {
-    if (!eventForm.title.trim()) return setError('Event title is required.');
-    if (!eventForm.location_link.trim()) return setError('Location link is required (single navigation source).');
+    const validationErrors = collectEventValidationErrors(eventForm);
+    if (Object.keys(validationErrors).length > 0) {
+      setEventFormErrors(validationErrors);
+      setStatus('');
+      setError('');
+      return false;
+    }
+    setEventFormErrors({});
     setSaving(true);
     setError('');
     setStatus('');
@@ -555,6 +607,8 @@ export default function App() {
         .split(/\r?\n/)
         .map((x) => x.trim())
         .filter(Boolean);
+      const feeValue = String(eventForm.fee || '').trim();
+      const normalizedFee = feeValue === '' ? null : Number.parseInt(feeValue, 10);
 
       const payload = {
         id: selectedEventId || undefined,
@@ -568,7 +622,7 @@ export default function App() {
         end_at: toIso(eventForm.end_at),
         location: eventForm.location.trim() || null,
         address: eventForm.address.trim() || null,
-        fee: eventForm.fee.trim() || null,
+        fee: Number.isFinite(normalizedFee) ? normalizedFee : null,
         location_link: eventForm.location_link.trim() || null,
         image_urls: imageUrls,
       };
@@ -576,15 +630,17 @@ export default function App() {
       if (upsertError) throw upsertError;
       await loadAll(sessionUser, profile);
       setStatus('Event saved.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to save event.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteEvent() {
-    if (!selectedEventId) return;
+    if (!selectedEventId) return false;
     setSaving(true);
     try {
       const { error: deleteError } = await supabase.from('events').delete().eq('id', selectedEventId);
@@ -592,15 +648,20 @@ export default function App() {
       setSelectedEventId(null);
       await loadAll(sessionUser, profile);
       setStatus('Event deleted.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete event.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function saveContent() {
-    if (!contentForm.title.trim()) return setError('Content title is required.');
+    if (!contentForm.title.trim()) {
+      setError('Content title is required.');
+      return false;
+    }
 
     const quizPayload = (contentForm.quiz_payload || [])
       .map((q) => ({
@@ -642,15 +703,17 @@ export default function App() {
       if (upsertError) throw upsertError;
       await loadAll(sessionUser, profile);
       setStatus('Educational content saved.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to save content.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteContent() {
-    if (!selectedContentId) return;
+    if (!selectedContentId) return false;
     setSaving(true);
     try {
       const { error: deleteError } = await supabase.from('educational_contents').delete().eq('id', selectedContentId);
@@ -658,15 +721,17 @@ export default function App() {
       setSelectedContentId(null);
       await loadAll(sessionUser, profile);
       setStatus('Educational content deleted.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete content.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function saveUser() {
-    if (!selectedUserId || !userForm) return;
+    if (!selectedUserId || !userForm) return false;
     setSaving(true);
     try {
       const payload = {
@@ -684,15 +749,17 @@ export default function App() {
       if (upsertError) throw upsertError;
       await loadAll(sessionUser, profile);
       setStatus('User profile updated.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to save user.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteUserProfile() {
-    if (!selectedUserId) return;
+    if (!selectedUserId) return false;
     setSaving(true);
     try {
       const { error: deleteError } = await supabase.from('profiles').delete().eq('id', selectedUserId);
@@ -700,20 +767,29 @@ export default function App() {
       setSelectedUserId(null);
       await loadAll(sessionUser, profile);
       setStatus('Profile row deleted.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete profile row.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function saveQuestion() {
-    if (!questionForm.prompt.trim()) return setError('Question prompt is required.');
-    if (!questionForm.category.trim()) return setError('Question category is required.');
+    if (!questionForm.prompt.trim()) {
+      setError('Question prompt is required.');
+      return false;
+    }
+    if (!questionForm.category.trim()) {
+      setError('Question category is required.');
+      return false;
+    }
 
     const parsedOptions = parseOptionsText(questionForm.options_text);
     if (questionForm.answer_type === 'custom' && parsedOptions.length < 2) {
-      return setError('Custom type requires at least 2 options (label|value).');
+      setError('Custom type requires at least 2 options (label|value).');
+      return false;
     }
 
     setSaving(true);
@@ -733,15 +809,17 @@ export default function App() {
 
       await loadAll(sessionUser, profile);
       setStatus('Wellbeing question saved.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to save wellbeing question.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteQuestion() {
-    if (!selectedQuestionId) return;
+    if (!selectedQuestionId) return false;
 
     setSaving(true);
     try {
@@ -755,34 +833,61 @@ export default function App() {
       setSelectedQuestionId(null);
       await loadAll(sessionUser, profile);
       setStatus('Wellbeing question deleted.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete wellbeing question.');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function saveClinicalTool() {
-    if (!selectedClinicalToolId) return;
+    if (!clinicalToolForm.code.trim()) {
+      setError('Tool code is required.');
+      return false;
+    }
+    if (!clinicalToolForm.name.trim()) {
+      setError('Tool name is required.');
+      return false;
+    }
 
     setSaving(true);
     try {
-      const { error: updateError } = await supabase
-        .from('clinical_tools')
-        .update({ is_active: clinicalToolForm.is_active })
-        .eq('id', selectedClinicalToolId);
+      const payload = {
+        code: clinicalToolForm.code.trim(),
+        name: clinicalToolForm.name.trim(),
+        description: clinicalToolForm.description.trim() || null,
+        is_active: clinicalToolForm.is_active,
+      };
 
-      if (updateError) {
-        if (isMissingColumnError(updateError)) {
+      let saveError = null;
+      if (selectedClinicalToolId) {
+        const { error: updateError } = await supabase
+          .from('clinical_tools')
+          .update(payload)
+          .eq('id', selectedClinicalToolId);
+        saveError = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('clinical_tools')
+          .insert(payload);
+        saveError = insertError;
+      }
+
+      if (saveError) {
+        if (isMissingColumnError(saveError)) {
           throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
         }
-        throw updateError;
+        throw saveError;
       }
 
       await loadAll(sessionUser, profile);
-      setStatus('Self-assessment tool updated.');
+      setStatus(selectedClinicalToolId ? 'Self-assessment tool updated.' : 'Self-assessment tool created.');
+      return true;
     } catch (e) {
       setError(e?.message || 'Failed to save self-assessment tool.');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -816,6 +921,46 @@ export default function App() {
       setStatus(`Tool ${item.code || item.name || ''} is now ${nextActive ? 'enabled' : 'disabled'}.`);
     } catch (e) {
       setError(e?.message || 'Failed to update tool status.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleQuestion(item, nextActive) {
+    if (!item?.id) {
+      console.error('No item ID provided to toggleQuestion');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      console.log(`Toggling question ${item.id} to ${nextActive}`);
+      const { error: updateError, data } = await supabase
+        .from('wellbeing_questions')
+        .update({ is_active: nextActive })
+        .eq('id', item.id);
+
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        if (isMissingColumnError(updateError)) {
+          throw new Error('Missing column wellbeing_questions.is_active. Please run the database migration.');
+        }
+        throw updateError;
+      }
+
+      console.log('Update successful:', data);
+      setWellbeingQuestions((prev) => prev.map((question) => (
+        question.id === item.id ? { ...question, is_active: nextActive } : question
+      )));
+
+      if (selectedQuestionId === item.id) {
+        setQuestionForm((prev) => ({ ...prev, is_active: nextActive }));
+      }
+
+      setStatus(`Question is now ${nextActive ? 'enabled' : 'disabled'}.`);
+    } catch (e) {
+      console.error('Toggle question error:', e);
+      setError(e?.message || 'Failed to update question status.');
     } finally {
       setSaving(false);
     }
@@ -913,25 +1058,38 @@ export default function App() {
             clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
             clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
             toggleClinicalTool={toggleClinicalTool}
+            toggleQuestion={toggleQuestion}
             eventForm={eventForm}
             setEventForm={setEventForm}
+            eventFormErrors={eventFormErrors}
+            setEventFormErrors={setEventFormErrors}
             saveEvent={saveEvent}
             deleteEvent={deleteEvent}
+            isEditingEvent={isEditingEvent}
+            setIsEditingEvent={setIsEditingEvent}
             contentForm={contentForm}
             setContentForm={setContentForm}
             saveContent={saveContent}
             deleteContent={deleteContent}
+            isEditingContent={isEditingContent}
+            setIsEditingContent={setIsEditingContent}
             userForm={userForm}
             setUserForm={setUserForm}
             saveUser={saveUser}
             deleteUserProfile={deleteUserProfile}
+            isEditingUser={isEditingUser}
+            setIsEditingUser={setIsEditingUser}
             questionForm={questionForm}
             setQuestionForm={setQuestionForm}
             saveQuestion={saveQuestion}
             deleteQuestion={deleteQuestion}
+            isEditingQuestion={isEditingQuestion}
+            setIsEditingQuestion={setIsEditingQuestion}
             clinicalToolForm={clinicalToolForm}
             setClinicalToolForm={setClinicalToolForm}
             saveClinicalTool={saveClinicalTool}
+            isEditingClinicalTool={isEditingClinicalTool}
+            setIsEditingClinicalTool={setIsEditingClinicalTool}
             selectedToolQuestions={selectedToolQuestions}
             selectedToolQuestionId={selectedToolQuestionId}
             setSelectedToolQuestionId={setSelectedToolQuestionId}

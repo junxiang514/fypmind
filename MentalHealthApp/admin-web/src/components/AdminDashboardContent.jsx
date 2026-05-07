@@ -1,5 +1,6 @@
 import React from 'react';
 import EventsEditor, { EMPTY_EVENT } from './EventsEditor';
+import EventsGrid from './EventsGrid';
 import EducationalContentEditor, {
   EMPTY_CONTENT,
 } from './EducationalContentEditor';
@@ -93,7 +94,7 @@ function HomeDashboardPage({
   const resourcesMetrics = [
     { icon: '📅', label: 'Events', value: kpis.events, tab: 'events' },
     { icon: '📚', label: 'Educational Content', value: kpis.contents, tab: 'contents' },
-    { icon: '❓', label: 'Check-Ins Questions', value: kpis.questions, tab: 'questions' },
+    { icon: '❓', label: 'Check-ins Question', value: kpis.questions, tab: 'questions' },
     { icon: '🔍', label: 'Self-Assessment Tools', value: kpis.tools, tab: 'clinical-tools' },
   ];
 
@@ -106,8 +107,7 @@ function HomeDashboardPage({
     <section className="dashboard-home">
       <div className="dashboard-home-header">
         <div>
-          <div className="dashboard-home-eyebrow">Dashboard</div>
-          <h2>All KPI metrics in one place</h2>
+          <h2>Dashboard</h2>
           <p>Overview of MIND Application.</p>
         </div>
       </div>
@@ -160,22 +160,35 @@ export default function AdminDashboardContent({
   clinicalSubmissionStatsByToolId,
   clinicalQuestionCountByToolId,
   toggleClinicalTool,
+  toggleQuestion,
   eventForm,
   setEventForm,
+  eventFormErrors,
+  setEventFormErrors,
   saveEvent,
+  isEditingEvent,
+  setIsEditingEvent,
   deleteEvent,
+  isEditingContent,
+  setIsEditingContent,
   contentForm,
   setContentForm,
   saveContent,
   deleteContent,
+  isEditingUser,
+  setIsEditingUser,
   userForm,
   setUserForm,
   saveUser,
   deleteUserProfile,
+  isEditingQuestion,
+  setIsEditingQuestion,
   questionForm,
   setQuestionForm,
   saveQuestion,
   deleteQuestion,
+  isEditingClinicalTool,
+  setIsEditingClinicalTool,
   clinicalToolForm,
   setClinicalToolForm,
   saveClinicalTool,
@@ -186,6 +199,56 @@ export default function AdminDashboardContent({
   setToolQuestionForm,
   saveSelectedToolQuestion,
 }) {
+  const [selectedQuestionCategory, setSelectedQuestionCategory] = React.useState(null);
+
+  const showFloatingAddButton = tab !== 'dashboard' && tab !== 'users';
+  const addButtonLabel = {
+    events: 'Add Event',
+    contents: 'Add Content',
+    questions: 'Add Question',
+    'clinical-tools': 'Add Tool',
+  }[tab] || 'Add';
+
+  const openAddModal = () => {
+    if (tab === 'events') {
+      setSelectedEventId(null);
+      setEventForm(EMPTY_EVENT);
+      setEventFormErrors({});
+      setIsEditingEvent(true);
+      return;
+    }
+
+    if (tab === 'contents') {
+      setSelectedContentId(null);
+      setContentForm(EMPTY_CONTENT);
+      setIsEditingContent(true);
+      return;
+    }
+
+    if (tab === 'questions') {
+      setSelectedQuestionId(null);
+      setQuestionForm(EMPTY_WELLBEING_QUESTION);
+      setIsEditingQuestion(true);
+      return;
+    }
+
+    if (tab === 'clinical-tools') {
+      setSelectedClinicalToolId(null);
+      setClinicalToolForm(EMPTY_CLINICAL_TOOL);
+      setSelectedToolQuestionId(null);
+      setToolQuestionForm({ question_order: 1, question_text: '', options_text: '' });
+      setIsEditingClinicalTool(true);
+    }
+  };
+
+  const pageMeta = {
+    events: { title: 'Events', subtitle: 'Manage upcoming and past events in one place.' },
+    contents: { title: 'Educational Content', subtitle: 'Review and update learning resources.' },
+    questions: { title: 'Check-ins Question', subtitle: 'Manage the daily wellbeing check-in questions.' },
+    'clinical-tools': { title: 'Self-Assessment Tools', subtitle: 'Create and maintain assessment tool sets.' },
+    users: { title: 'Users', subtitle: 'View and manage user profiles.' },
+  }[tab] || { title: '', subtitle: '' };
+
   if (tab === 'dashboard') {
     return (
       <HomeDashboardPage
@@ -197,56 +260,142 @@ export default function AdminDashboardContent({
     );
   }
 
-  const recordList = (
-    <AdminRecordList
-      tab={tab}
-      filteredEvents={filteredEvents}
-      filteredContents={filteredContents}
-      filteredUsers={filteredUsers}
-      filteredQuestions={filteredQuestions}
-      filteredClinicalTools={filteredClinicalTools}
-      selectedEventId={selectedEventId}
-      selectedContentId={selectedContentId}
-      selectedUserId={selectedUserId}
-      selectedQuestionId={selectedQuestionId}
-      selectedClinicalToolId={selectedClinicalToolId}
-      setSelectedEventId={setSelectedEventId}
-      setSelectedContentId={setSelectedContentId}
-      setSelectedUserId={setSelectedUserId}
-      setSelectedQuestionId={setSelectedQuestionId}
-      setSelectedClinicalToolId={setSelectedClinicalToolId}
-      clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
-      clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
-      saving={saving}
-      toggleClinicalTool={toggleClinicalTool}
-    />
-  );
+  const now = new Date();
+  const upcomingEvents = filteredEvents
+    .filter((event) => {
+      if (!event?.start_at) return true;
+      const start = new Date(event.start_at);
+      return Number.isNaN(start.getTime()) ? true : start >= now;
+    })
+    .sort((a, b) => new Date(a.start_at || 0) - new Date(b.start_at || 0));
+
+  const pastEvents = filteredEvents
+    .filter((event) => {
+      if (!event?.start_at) return false;
+      const start = new Date(event.start_at);
+      return !Number.isNaN(start.getTime()) && start < now;
+    })
+    .sort((a, b) => new Date(b.start_at || 0) - new Date(a.start_at || 0));
+
+  const recordList =
+    tab === 'events' ? (
+      <div className="events-section-wrap">
+        <section className="card events-section-card">
+          <div className="events-section-head">
+            <h3>Upcoming Events</h3>
+            <span className="events-section-badge">{upcomingEvents.length}</span>
+          </div>
+          <EventsGrid
+            events={upcomingEvents}
+            onEditEvent={(eventId) => {
+              setSelectedEventId(eventId);
+              setIsEditingEvent(true);
+            }}
+            saving={saving}
+          />
+        </section>
+
+        <section className="card events-section-card">
+          <div className="events-section-head">
+            <h3>Past Events</h3>
+            <span className="events-section-badge">{pastEvents.length}</span>
+          </div>
+          <EventsGrid
+            events={pastEvents}
+            onEditEvent={(eventId) => {
+              setSelectedEventId(eventId);
+              setIsEditingEvent(true);
+            }}
+            saving={saving}
+          />
+        </section>
+      </div>
+    ) : tab === 'questions' ? (
+      <div>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <button
+            className={`btn ${selectedQuestionCategory === null ? 'primary' : 'light'}`}
+            onClick={() => setSelectedQuestionCategory(null)}
+          >
+            All Categories
+          </button>
+          {Array.from(new Set(filteredQuestions.map((q) => q.category || 'General'))).map((category) => (
+            <button
+              key={category}
+              className={`btn ${selectedQuestionCategory === category ? 'primary' : 'light'}`}
+              onClick={() => setSelectedQuestionCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+        <AdminRecordList
+          tab={tab}
+          filteredEvents={filteredEvents}
+          filteredContents={filteredContents}
+          filteredUsers={filteredUsers}
+          filteredQuestions={selectedQuestionCategory ? filteredQuestions.filter((q) => (q.category || 'General') === selectedQuestionCategory) : filteredQuestions}
+          filteredClinicalTools={filteredClinicalTools}
+          selectedEventId={selectedEventId}
+          selectedContentId={selectedContentId}
+          selectedUserId={selectedUserId}
+          selectedQuestionId={selectedQuestionId}
+          selectedClinicalToolId={selectedClinicalToolId}
+          setSelectedEventId={setSelectedEventId}
+          setSelectedContentId={setSelectedContentId}
+          setSelectedUserId={setSelectedUserId}
+          setSelectedQuestionId={setSelectedQuestionId}
+          setSelectedClinicalToolId={setSelectedClinicalToolId}
+          clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
+          clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+          saving={saving}
+          toggleClinicalTool={toggleClinicalTool}
+          onEditContent={() => setIsEditingContent(true)}
+          onEditUser={() => setIsEditingUser(true)}
+          onEditQuestion={() => setIsEditingQuestion(true)}
+          onEditClinicalTool={() => setIsEditingClinicalTool(true)}
+        />
+      </div>
+    ) : (
+      <AdminRecordList
+        tab={tab}
+        filteredEvents={filteredEvents}
+        filteredContents={filteredContents}
+        filteredUsers={filteredUsers}
+        filteredQuestions={filteredQuestions}
+        filteredClinicalTools={filteredClinicalTools}
+        selectedEventId={selectedEventId}
+        selectedContentId={selectedContentId}
+        selectedUserId={selectedUserId}
+        selectedQuestionId={selectedQuestionId}
+        selectedClinicalToolId={selectedClinicalToolId}
+        setSelectedEventId={setSelectedEventId}
+        setSelectedContentId={setSelectedContentId}
+        setSelectedUserId={setSelectedUserId}
+        setSelectedQuestionId={setSelectedQuestionId}
+        setSelectedClinicalToolId={setSelectedClinicalToolId}
+        clinicalSubmissionStatsByToolId={clinicalSubmissionStatsByToolId}
+        clinicalQuestionCountByToolId={clinicalQuestionCountByToolId}
+        saving={saving}
+        toggleClinicalTool={toggleClinicalTool}
+        toggleQuestion={toggleQuestion}
+        onEditContent={() => setIsEditingContent(true)}
+        onEditUser={() => setIsEditingUser(true)}
+        onEditQuestion={() => setIsEditingQuestion(true)}
+        onEditClinicalTool={() => setIsEditingClinicalTool(true)}
+      />
+    );
 
   const editorPanel = (
     <div className="card form">
-      {tab === 'events' && (
-        <EventsEditor
-          eventForm={eventForm}
-          setEventForm={setEventForm}
-          saving={saving}
-          selectedEventId={selectedEventId}
-          onSave={saveEvent}
-          onDelete={deleteEvent}
-          onNew={() => {
-            setSelectedEventId(null);
-            setEventForm(EMPTY_EVENT);
-          }}
-        />
-      )}
-
       {tab === 'contents' && (
         <EducationalContentEditor
           contentForm={contentForm}
           setContentForm={setContentForm}
           saving={saving}
           selectedContentId={selectedContentId}
-          onSave={saveContent}
-          onDelete={deleteContent}
+          onSave={async () => { const ok = await saveContent(); if (ok) setIsEditingContent(false); }}
+          onDelete={async () => { const ok = await deleteContent(); if (ok) setIsEditingContent(false); }}
           onNew={() => {
             setSelectedContentId(null);
             setContentForm(EMPTY_CONTENT);
@@ -260,8 +409,8 @@ export default function AdminDashboardContent({
           setUserForm={setUserForm}
           saving={saving}
           selectedUserId={selectedUserId}
-          onSave={saveUser}
-          onDelete={deleteUserProfile}
+          onSave={async () => { const ok = await saveUser(); if (ok) setIsEditingUser(false); }}
+          onDelete={async () => { const ok = await deleteUserProfile(); if (ok) setIsEditingUser(false); }}
         />
       )}
 
@@ -271,8 +420,8 @@ export default function AdminDashboardContent({
           setForm={setQuestionForm}
           saving={saving}
           selectedId={selectedQuestionId}
-          onSave={saveQuestion}
-          onDelete={deleteQuestion}
+          onSave={async () => { const ok = await saveQuestion(); if (ok) setIsEditingQuestion(false); }}
+          onDelete={async () => { const ok = await deleteQuestion(); if (ok) setIsEditingQuestion(false); }}
           onNew={() => {
             setSelectedQuestionId(null);
             setQuestionForm(EMPTY_WELLBEING_QUESTION);
@@ -291,22 +440,115 @@ export default function AdminDashboardContent({
           lastSubmissionAt={
             clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId || ''))?.lastAt || null
           }
-          onSave={saveClinicalTool}
           questions={selectedToolQuestions}
           selectedQuestionId={selectedToolQuestionId}
           onSelectQuestion={setSelectedToolQuestionId}
           questionForm={toolQuestionForm}
           setQuestionForm={setToolQuestionForm}
           onSaveQuestion={saveSelectedToolQuestion}
+          onSave={async () => { const ok = await saveClinicalTool(); if (ok) setIsEditingClinicalTool(false); }}
         />
       )}
     </div>
   );
 
   return (
-    <section className="admin-content">
-      <div className="admin-panel card">{recordList}</div>
-      <div className="admin-panel">{editorPanel}</div>
-    </section>
+    <>
+      <section className="dashboard-home" style={{ gap: '8px' }}>
+        <div className="dashboard-home-header">
+          <div className="dashboard-home-header-main">
+            <h2>{pageMeta.title}</h2>
+            <p>{pageMeta.subtitle}</p>
+          </div>
+          {showFloatingAddButton && (
+            <button type="button" className="header-add-button" onClick={openAddModal}>
+              <span className="header-add-plus">+</span>
+              <span>{addButtonLabel}</span>
+            </button>
+          )}
+        </div>
+
+        <section className="admin-content" style={{ gridTemplateColumns: '1fr', marginTop: '6px' }}>
+          {recordList}
+        </section>
+      </section>
+      {tab === 'contents' && isEditingContent && (
+        <EducationalContentEditor
+          contentForm={contentForm}
+          setContentForm={setContentForm}
+          saving={saving}
+          selectedContentId={selectedContentId}
+          onSave={async () => { const ok = await saveContent(); if (ok) setIsEditingContent(false); }}
+          onDelete={async () => { const ok = await deleteContent(); if (ok) setIsEditingContent(false); }}
+          isEditingContent={isEditingContent}
+          onCloseEditor={() => setIsEditingContent(false)}
+        />
+      )}
+
+      {tab === 'users' && isEditingUser && (
+        <UserEditor
+          userForm={userForm}
+          setUserForm={setUserForm}
+          saving={saving}
+          selectedUserId={selectedUserId}
+          onSave={async () => { const ok = await saveUser(); if (ok) setIsEditingUser(false); }}
+          onDelete={async () => { const ok = await deleteUserProfile(); if (ok) setIsEditingUser(false); }}
+          isEditingUser={isEditingUser}
+          onCloseEditor={() => setIsEditingUser(false)}
+        />
+      )}
+
+      {tab === 'questions' && isEditingQuestion && (
+        <WellbeingQuestionsEditor
+          form={questionForm}
+          setForm={setQuestionForm}
+          saving={saving}
+          selectedId={selectedQuestionId}
+          onSave={async () => { const ok = await saveQuestion(); if (ok) setIsEditingQuestion(false); }}
+          onDelete={async () => { const ok = await deleteQuestion(); if (ok) setIsEditingQuestion(false); }}
+          isEditingQuestion={isEditingQuestion}
+          onCloseEditor={() => setIsEditingQuestion(false)}
+        />
+      )}
+
+      {tab === 'clinical-tools' && isEditingClinicalTool && (
+        <ClinicalToolsEditor
+          form={clinicalToolForm}
+          setForm={setClinicalToolForm}
+          saving={saving}
+          selectedId={selectedClinicalToolId}
+          onSave={async () => { const ok = await saveClinicalTool(); if (ok) setIsEditingClinicalTool(false); }}
+          questionCount={clinicalQuestionCountByToolId.get(String(selectedClinicalToolId)) || 0}
+          submissionCount={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId))?.count || 0}
+          lastSubmissionAt={clinicalSubmissionStatsByToolId.get(String(selectedClinicalToolId))?.lastAt || null}
+          questions={selectedToolQuestions}
+          selectedQuestionId={selectedToolQuestionId}
+          onSelectQuestion={setSelectedToolQuestionId}
+          questionForm={toolQuestionForm}
+          setQuestionForm={setToolQuestionForm}
+          onSaveQuestion={saveSelectedToolQuestion}
+          isEditingClinicalTool={isEditingClinicalTool}
+          onCloseEditor={() => setIsEditingClinicalTool(false)}
+        />
+      )}
+      {tab === 'events' && isEditingEvent && (
+        <EventsEditor
+          eventForm={eventForm}
+          setEventForm={setEventForm}
+          eventFormErrors={eventFormErrors}
+          setEventFormErrors={setEventFormErrors}
+          saving={saving}
+          selectedEventId={selectedEventId}
+          onSave={async () => { const ok = await saveEvent(); if (ok) setIsEditingEvent(false); }}
+          onDelete={async () => { const ok = await deleteEvent(); if (ok) setIsEditingEvent(false); }}
+          isEditingEvent={isEditingEvent}
+          onCloseEditor={() => {
+            setEventFormErrors({});
+            setIsEditingEvent(false);
+          }}
+        />
+      )}
+
+    </>
   );
 }

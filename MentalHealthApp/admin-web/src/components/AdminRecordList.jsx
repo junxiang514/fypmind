@@ -21,39 +21,91 @@ export default function AdminRecordList({
   clinicalQuestionCountByToolId,
   saving,
   toggleClinicalTool,
+  toggleQuestion,
+  onEditContent,
+  onEditUser,
+  onEditQuestion,
+  onEditClinicalTool,
 }) {
-  return (
-    <div className="card list">
-      {tab === 'events' && filteredEvents.map((item) => (
-        <button key={item.id} className={`list-item ${item.id === selectedEventId ? 'active' : ''}`} onClick={() => setSelectedEventId(item.id)}>
-          <strong>{item.title}</strong>
-          <small>{item.category || 'N/A'} • {item.location || 'No location'}</small>
-        </button>
-      ))}
+  const shortText = (value, max = 120) => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+  };
 
-      {tab === 'contents' && filteredContents.map((item) => (
-        <button key={item.id} className={`list-item ${item.id === selectedContentId ? 'active' : ''}`} onClick={() => setSelectedContentId(item.id)}>
-          <strong>{item.title}</strong>
-          <small>{item.category || 'N/A'}</small>
-        </button>
-      ))}
+  const getYouTubeThumbnail = (url) => {
+    const text = String(url || '').trim();
+    if (!text) return '';
+
+    const patterns = [
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
+    }
+
+    return '';
+  };
+
+  return (
+    <div className={`list ${tab === 'contents' ? 'contents-list' : ''} ${tab === 'questions' ? 'questions-list' : ''} ${tab === 'clinical-tools' ? 'clinical-tools-list' : ''}`}>
+      {tab === 'contents' && filteredContents.map((item) => {
+        const thumbnail = getYouTubeThumbnail(item.video_url);
+
+        return (
+          <div key={item.id} className={`list-item ${item.id === selectedContentId ? 'active' : ''}`}>
+            <div className="list-item-media">
+              {thumbnail ? (
+                <img src={thumbnail} alt={item.title} />
+              ) : (
+                <div className="list-item-media-fallback">
+                  <span>📚</span>
+                </div>
+              )}
+            </div>
+            <button className="list-item-main" type="button" onClick={() => setSelectedContentId(item.id)}>
+              <strong>{item.title}</strong>
+              <small>{shortText(item.summary, 80) || 'N/A'}</small>
+              <div className="list-item-meta">
+                <span>{item.category || 'General'}</span>
+                <span>{Array.isArray(item.quiz_payload) ? `${item.quiz_payload.length} Quiz` : '0 Quiz'}</span>
+                <span>{Array.isArray(item.activity_payload) ? `${item.activity_payload.length} activities` : '0 activities'}</span>
+              </div>
+            </button>
+            <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedContentId(item.id); onEditContent && onEditContent(item.id); }}>Edit</button>
+          </div>
+        );
+      })}
 
       {tab === 'users' && filteredUsers.map((item) => (
-        <button key={item.id} className={`list-item ${item.id === selectedUserId ? 'active' : ''}`} onClick={() => setSelectedUserId(item.id)}>
-          <strong>{item.full_name || item.email || item.id}</strong>
-          <small>{item.email || 'No email'} • {item.role || 'user'}{item.is_admin ? ' • admin' : ''}</small>
-        </button>
+        <div key={item.id} className={`list-item ${item.id === selectedUserId ? 'active' : ''}`}>
+          <button className="list-item-main" type="button" onClick={() => setSelectedUserId(item.id)}>
+            <strong>{item.full_name || item.email || item.id}</strong>
+            <small>{item.email || 'No email'} • {item.role || 'user'}{item.is_admin ? ' • admin' : ''}</small>
+            <div className="list-item-meta">
+              <span>{item.phone || 'No phone'}</span>
+              <span>{item.gender || 'No gender'}</span>
+              <span>{item.is_active ? 'Active' : 'Inactive'}</span>
+            </div>
+            {shortText(item.medical_history) && <small className="list-item-preview">{shortText(item.medical_history)}</small>}
+          </button>
+          <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedUserId(item.id); onEditUser && onEditUser(item.id); }}>Edit</button>
+        </div>
       ))}
 
       {tab === 'questions' && filteredQuestions.map((item) => (
-        <button
-          key={item.id}
-          className={`list-item ${item.id === selectedQuestionId ? 'active' : ''}`}
-          onClick={() => setSelectedQuestionId(item.id)}
-        >
-          <strong>{item.prompt}</strong>
-          <small>{item.category || 'General'} • {item.answer_type || 'likert_5'} • {item.is_active ? 'active' : 'inactive'}</small>
-        </button>
+        <div key={item.id} className={`list-item ${item.id === selectedQuestionId ? 'active' : ''}`}>
+          <button className="list-item-main" type="button" onClick={() => setSelectedQuestionId(item.id)}>
+            <strong>{item.prompt}</strong>
+            <div className="list-item-meta">
+              <span>{item.answer_type === 'custom' && Array.isArray(item.options) ? `${item.options.length} options` : 'Likert 1-5'}</span>
+              <span>{item.category || 'General'}</span>
+            </div>
+          </button>
+          <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedQuestionId(item.id); onEditQuestion && onEditQuestion(item.id); }}>Edit</button>
+        </div>
       ))}
 
       {tab === 'clinical-tools' && filteredClinicalTools.map((item) => {
@@ -61,31 +113,27 @@ export default function AdminRecordList({
         const submissionCount = stat?.count || 0;
         const questionCount = clinicalQuestionCountByToolId.get(String(item.id)) || 0;
         return (
-          <button
+          <div
             key={item.id}
             className={`list-item ${item.id === selectedClinicalToolId ? 'active' : ''}`}
-            onClick={() => setSelectedClinicalToolId(item.id)}
           >
-            <div className="list-item-head">
+            <button className="list-item-main" type="button" onClick={() => setSelectedClinicalToolId(item.id)}>
               <strong>{item.code} — {item.name}</strong>
-              <button
-                type="button"
-                className={`btn tiny-btn ${item.is_active ? 'light' : 'danger'}`}
-                disabled={saving}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleClinicalTool(item, !item.is_active);
-                }}
-              >
-                {item.is_active ? 'Disable' : 'Enable'}
-              </button>
-            </div>
-            <small className="clinical-meta-row">
-              <span><strong>Status:</strong> {item.is_active ? 'Enabled' : 'Disabled'}</span>
-              <span><strong>Questions:</strong> {questionCount}</span>
-              <span><strong>Submissions:</strong> {submissionCount}</span>
-            </small>
-          </button>
+              {shortText(item.description) && <small>{shortText(item.description)}</small>}
+              <div className="list-item-meta">
+                <span>{item.is_active ? 'Enabled' : 'Disabled'}</span>
+                <span>{questionCount} Questions</span>
+                <span>{submissionCount} Submissions</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="btn light tiny-btn"
+              onClick={() => { setSelectedClinicalToolId(item.id); onEditClinicalTool && onEditClinicalTool(item.id); }}
+            >
+              Edit
+            </button>
+          </div>
         );
       })}
 

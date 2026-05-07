@@ -1,11 +1,16 @@
 import React from 'react';
 
-export default function UserEditor({ userForm, setUserForm, saving, selectedUserId, onSave, onDelete }) {
-  if (!userForm) return null;
+export default function UserEditor({ userForm, setUserForm, saving, selectedUserId, onSave, onDelete, isEditingUser, onCloseEditor }) {
+  if (!isEditingUser || !userForm) return null;
 
   return (
-    <>
-      <h3>User Profile</h3>
+    <div className="modal-overlay" onClick={onCloseEditor}>
+      <div className="modal-content modal-editor" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Edit User Profile</h2>
+          <button className="modal-close" onClick={onCloseEditor}>✕</button>
+        </div>
+        <div className="modal-body">
       <label>Full name</label>
       <input value={userForm.full_name} onChange={(e) => setUserForm((s) => ({ ...s, full_name: e.target.value }))} />
       <label>Email</label>
@@ -25,10 +30,13 @@ export default function UserEditor({ userForm, setUserForm, saving, selectedUser
         <label><input type="checkbox" checked={userForm.is_admin} onChange={(e) => setUserForm((s) => ({ ...s, is_admin: e.target.checked }))} /> is_admin</label>
         <label><input type="checkbox" checked={userForm.is_active} onChange={(e) => setUserForm((s) => ({ ...s, is_active: e.target.checked }))} /> is_active</label>
       </div>
-      <div className="row">
-        <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
-        {selectedUserId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete Profile Row</button>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn light" onClick={onCloseEditor}>Cancel</button>
+          <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
+          {selectedUserId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete Profile Row</button>}
+        </div>
       </div>
-    </>
+    </div>
   );
 }

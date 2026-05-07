@@ -52,11 +52,21 @@ export default function EducationalContentEditor({
   selectedContentId,
   onSave,
   onDelete,
-  onNew,
+  isEditingContent,
+  onCloseEditor,
 }) {
+  if (!isEditingContent) {
+    return null;
+  }
+
   return (
-    <>
-      <h3>Educational Content</h3>
+    <div className="modal-overlay" onClick={onCloseEditor}>
+      <div className="modal-content modal-editor" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{selectedContentId ? 'Edit Educational Content' : 'Create Educational Content'}</h2>
+          <button className="modal-close" onClick={onCloseEditor}>✕</button>
+        </div>
+        <div className="modal-body">
       <label>Title</label>
       <input value={contentForm.title} onChange={(e) => setContentForm((s) => ({ ...s, title: e.target.value }))} />
       <label>Summary</label>
@@ -241,11 +251,12 @@ export default function EducationalContentEditor({
 
       <label>Body</label>
       <textarea className="tall" value={contentForm.body} onChange={(e) => setContentForm((s) => ({ ...s, body: e.target.value }))} />
-      <div className="row">
-        <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
-        <button className="btn light" onClick={onNew}>New</button>
-        {selectedContentId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete</button>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn light" onClick={onCloseEditor}>Cancel</button>
+          <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
+          {selectedContentId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete</button>}
+        </div>
       </div>
-    </>
-  );
+    </div>  );
 }

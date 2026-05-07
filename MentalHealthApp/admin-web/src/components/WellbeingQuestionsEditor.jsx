@@ -37,12 +37,19 @@ export default function WellbeingQuestionsEditor({
   selectedId,
   onSave,
   onDelete,
-  onNew,
+  isEditingQuestion,
+  onCloseEditor,
 }) {
-  return (
-    <>
-      <h3>Daily wellbeing question</h3>
+  if (!isEditingQuestion) return null;
 
+  return (
+    <div className="modal-overlay" onClick={onCloseEditor}>
+      <div className="modal-content modal-editor" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{selectedId ? 'Edit Wellbeing Question' : 'Create Wellbeing Question'}</h2>
+          <button className="modal-close" onClick={onCloseEditor}>✕</button>
+        </div>
+        <div className="modal-body">
       <label>Category</label>
       <input
         value={form.category}
@@ -81,20 +88,21 @@ export default function WellbeingQuestionsEditor({
         </>
       )}
 
-      <label className="checks">
-        <input
-          type="checkbox"
-          checked={form.is_active}
-          onChange={(e) => setForm((s) => ({ ...s, is_active: e.target.checked }))}
-        />
-        Active question
-      </label>
-
-      <div className="row">
-        <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
-        <button className="btn light" onClick={onNew}>New</button>
-        {selectedId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete</button>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn light" onClick={onCloseEditor}>Cancel</button>
+          <button
+            type="button"
+            className={`btn ${form.is_active ? 'primary' : 'light'}`}
+            onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
+            style={{ minWidth: '100px' }}
+          >
+            {form.is_active ? 'Active' : 'Inactive'}
+          </button>
+          <button className="btn primary" onClick={onSave} disabled={saving}>Save</button>
+          {selectedId && <button className="btn danger" onClick={onDelete} disabled={saving}>Delete</button>}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
