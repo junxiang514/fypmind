@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are a supportive mental health assistant for a mobile app.
 
@@ -21,8 +24,8 @@ Goal:
 Provide emotionally supportive, practical, and safe mental health guidance.
 
 Behavior rules:
-1) Focus on mental health, emotional wellbeing, stress, anxiety, depression, burnout, grief, relationships, sleep, coping skills, and self-care.
-2) If a message is not clearly mental-health related, do NOT hard-refuse immediately. Gently connect it to emotions/wellbeing and offer support.
+1) Only respond to messages related to mental health, emotional wellbeing, stress, anxiety, depression, burnout, grief, relationships, sleep, coping skills, and self-care.
+2) If a message is not related to mental health, give a brief polite redirection and invite the user to ask about wellbeing or emotional support.
 3) Never diagnose illnesses, prescribe medication, or provide legal/financial advice.
 4) If user may be at risk of self-harm/suicide, respond with empathy first, urge immediate real-world help, and suggest contacting local emergency services now.
 5) Keep tone warm, non-judgmental, and culturally respectful.
@@ -61,6 +64,47 @@ function getFinishReason(payload) {
   return payload?.candidates?.[0]?.finishReason || '';
 }
 
+function TypingIndicator() {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    anim.start();
+    return () => {
+      anim.stop();
+      progress.setValue(0);
+    };
+  }, []);
+
+  const dot1Opacity = progress.interpolate({
+    inputRange: [0, 0.33, 0.34, 1],
+    outputRange: [1, 1, 0.25, 0.25],
+  });
+  const dot2Opacity = progress.interpolate({
+    inputRange: [0, 0.33, 0.66, 0.67, 1],
+    outputRange: [0.25, 0.25, 1, 0.25, 0.25],
+  });
+  const dot3Opacity = progress.interpolate({
+    inputRange: [0, 0.66, 1],
+    outputRange: [0.25, 0.25, 1],
+  });
+
+  return (
+    <View style={styles.typingDots}>
+      <Animated.View style={[styles.typingDot, { opacity: dot1Opacity }]} />
+      <Animated.View style={[styles.typingDot, { opacity: dot2Opacity }]} />
+      <Animated.View style={[styles.typingDot, { opacity: dot3Opacity }]} />
+    </View>
+  );
+}
+
 export default function AIChatScreen({ navigation }) {
   const [messages, setMessages] = useState([
     { id: '1', text: 'Hello! I am your AI mental health assistant. How can I help you today?', sender: 'ai' },
@@ -71,8 +115,8 @@ export default function AIChatScreen({ navigation }) {
 
   const endpoint = useMemo(() => {
     if (!GEMINI_API_KEY) return null;
-    return `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
-  }, []);
+    return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  }, [GEMINI_API_KEY, GEMINI_MODEL]);
 
   const fetchGeminiReply = async (history) => {
     if (!endpoint) {
@@ -150,6 +194,9 @@ export default function AIChatScreen({ navigation }) {
     setMessages(nextMessages);
     setInputText('');
     setSending(true);
+    const typingId = `typing-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const typingMessage = { id: typingId, text: '', sender: 'ai', typing: true };
+    setMessages((prev) => [...prev, typingMessage]);
 
     try {
       const aiText = await fetchGeminiReply(nextMessages);
@@ -161,14 +208,14 @@ export default function AIChatScreen({ navigation }) {
         text: `${aiText}${safetyFooter}`,
         sender: 'ai',
       };
-      setMessages((prev) => [...prev, aiResponse]);
+      setMessages((prev) => [...prev.filter((m) => !m.typing), aiResponse]);
     } catch (error) {
       const fallback = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: `Sorry, I couldn't respond right now. ${error?.message || ''}`.trim(),
         sender: 'ai',
       };
-      setMessages((prev) => [...prev, fallback]);
+      setMessages((prev) => [...prev.filter((m) => !m.typing), fallback]);
     } finally {
       setSending(false);
       setTimeout(() => {
@@ -182,10 +229,16 @@ export default function AIChatScreen({ navigation }) {
       styles.messageBubble, 
       item.sender === 'user' ? styles.userBubble : styles.aiBubble
     ]}>
-      <Text style={[
-        styles.messageText,
-        item.sender === 'user' ? styles.userText : styles.aiText
-      ]}>{item.text}</Text>
+      {item.typing ? (
+        <View style={styles.typingContainer}>
+          <TypingIndicator />
+        </View>
+      ) : (
+        <Text style={[
+          styles.messageText,
+          item.sender === 'user' ? styles.userText : styles.aiText
+        ]}>{item.text}</Text>
+      )}
     </View>
   );
 
@@ -261,6 +314,21 @@ const styles = StyleSheet.create({
   },
   aiText: {
     color: '#333',
+  },
+  typingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+    backgroundColor: '#333',
   },
   inputContainer: {
     flexDirection: 'row',
