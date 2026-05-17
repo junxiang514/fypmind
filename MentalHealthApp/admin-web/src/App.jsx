@@ -47,6 +47,7 @@ export default function App() {
   const [clinicalQuestions, setClinicalQuestions] = useState([]);
   const [clinicalResponses, setClinicalResponses] = useState([]);
   const [educationalProgressRows, setEducationalProgressRows] = useState([]);
+  const [approvalItems, setApprovalItems] = useState([]);
 
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [isEditingEvent, setIsEditingEvent] = useState(false);
@@ -67,6 +68,10 @@ export default function App() {
     nameFromEmail(sessionUser?.email) ||
     sessionUser?.email ||
     'Admin';
+
+  const signedInRole =
+    profile?.role?.trim() ||
+    (profile?.is_admin ? 'Admin Access' : 'User');
 
   if (!supabase || supabaseInitError) {
     return (
@@ -95,11 +100,42 @@ export default function App() {
     return data || null;
   }
 
+  function isHeadRole(role) {
+    const headRoles = new Set(['Head of Mental Health Consultant', 'Head of Application Manager']);
+    return headRoles.has(role);
+  }
+
+  async function createOrApproveQueueEntry(operationType, tableName, recordId, recordData, currentUser, currentProfile) {
+    const userIsHead = isHeadRole(currentProfile?.role);
+    const now = new Date().toISOString();
+
+    const queueEntry = {
+      user_id: currentUser.id,
+      operation_type: operationType,
+      table_name: tableName,
+      record_id: recordId || null,
+      record_data: recordData,
+      status: userIsHead ? 'approved' : 'pending',
+      created_by_name: currentProfile?.full_name || currentUser?.email || 'Unknown',
+      created_at: now,
+      approved_at: userIsHead ? now : null,
+      approved_by: userIsHead ? currentUser.id : null,
+    };
+
+    const { data, error: insertError } = await supabase
+      .from('approval_queue')
+      .insert([queueEntry])
+      .select();
+
+    if (insertError) throw insertError;
+    return { approved: userIsHead, queueId: data?.[0]?.id };
+  }
+
   async function loadAll(currentUser = sessionUser, currentProfile = profile) {
     setLoading(true);
     setError('');
     try {
-      const [eventsRes, contentsRes, usersRes, questionsRes, toolsRes, clinicalQuestionsRes, responsesRes, educationalProgressRes] = await Promise.allSettled([
+      const [eventsRes, contentsRes, usersRes, questionsRes, toolsRes, clinicalQuestionsRes, responsesRes, educationalProgressRes, approvalsRes] = await Promise.allSettled([
         (publicReadClient || supabase)
           .from('events')
           .select('id, title, description, detailed_description, objective, agenda, category, start_at, end_at, location, address, fee, location_link, image_urls, created_at')
@@ -112,7 +148,7 @@ export default function App() {
           .limit(500),
         supabase
           .from('profiles')
-          .select('id, full_name, email, phone, gender, medical_history, role, is_admin, is_active, updated_at')
+          .select('id, full_name, email, phone, gender, role, is_admin, is_active, updated_at')
           .order('updated_at', { ascending: false })
           .limit(1000),
         (publicReadClient || supabase)
@@ -140,6 +176,11 @@ export default function App() {
           .select('content_id, updated_at')
           .order('updated_at', { ascending: false })
           .limit(20000),
+        supabase
+          .from('approval_queue')
+          .select('id, user_id, operation_type, table_name, record_id, record_data, status, created_at, approved_at, approved_by, rejection_reason, created_by_name')
+          .order('created_at', { ascending: false })
+          .limit(1000),
       ]);
 
       const nextEvents = eventsRes.status === 'fulfilled' ? (eventsRes.value.data || []) : [];
@@ -150,6 +191,7 @@ export default function App() {
       const nextClinicalQuestions = clinicalQuestionsRes.status === 'fulfilled' ? (clinicalQuestionsRes.value.data || []) : [];
       const nextResponses = responsesRes.status === 'fulfilled' ? (responsesRes.value.data || []) : [];
       const nextEducationalProgress = educationalProgressRes.status === 'fulfilled' ? (educationalProgressRes.value.data || []) : [];
+      const nextApprovalItems = approvalsRes.status === 'fulfilled' ? (approvalsRes.value.data || []) : [];
 
       const eventsError = eventsRes.status === 'fulfilled' ? eventsRes.value.error : eventsRes.reason;
       const contentsError = contentsRes.status === 'fulfilled' ? contentsRes.value.error : contentsRes.reason;
@@ -245,6 +287,7 @@ export default function App() {
       setClinicalQuestions(normalizedClinicalQuestions);
       setClinicalResponses(nextResponses);
       setEducationalProgressRows(nextEducationalProgress);
+      setApprovalItems(nextApprovalItems);
 
       if (!selectedEventId && nextEvents.length) setSelectedEventId(nextEvents[0].id);
       if (!selectedContentId && nextContents.length) setSelectedContentId(nextContents[0].id);
@@ -490,8 +533,7 @@ export default function App() {
       email: selectedUser.email || '',
       phone: selectedUser.phone || '',
       gender: selectedUser.gender || '',
-      medical_history: selectedUser.medical_history || '',
-      role: selectedUser.role || 'user',
+      role: selectedUser.is_admin ? (selectedUser.role || 'Mental Health Consultant') : null,
       is_admin: Boolean(selectedUser.is_admin),
       is_active: selectedUser.is_active !== false,
     });
@@ -626,10 +668,18 @@ export default function App() {
         location_link: eventForm.location_link.trim() || null,
         image_urls: imageUrls,
       };
-      const { error: upsertError } = await supabase.from('events').upsert(payload, { onConflict: 'id' });
-      if (upsertError) throw upsertError;
-      await loadAll(sessionUser, profile);
-      setStatus('Event saved.');
+
+      const operationType = selectedEventId ? 'update' : 'add';
+      const { approved } = await createOrApproveQueueEntry(operationType, 'events', selectedEventId, payload, sessionUser, profile);
+      
+      if (approved) {
+        const { error: upsertError } = await supabase.from('events').upsert(payload, { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+        await loadAll(sessionUser, profile);
+        setStatus('Event saved and approved.');
+      } else {
+        setStatus('Event submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to save event.');
@@ -643,11 +693,18 @@ export default function App() {
     if (!selectedEventId) return false;
     setSaving(true);
     try {
-      const { error: deleteError } = await supabase.from('events').delete().eq('id', selectedEventId);
-      if (deleteError) throw deleteError;
-      setSelectedEventId(null);
-      await loadAll(sessionUser, profile);
-      setStatus('Event deleted.');
+      const eventRow = events.find((x) => x.id === selectedEventId) || { id: selectedEventId };
+      const { approved } = await createOrApproveQueueEntry('delete', 'events', selectedEventId, eventRow, sessionUser, profile);
+      
+      if (approved) {
+        const { error: deleteError } = await supabase.from('events').delete().eq('id', selectedEventId);
+        if (deleteError) throw deleteError;
+        setSelectedEventId(null);
+        await loadAll(sessionUser, profile);
+        setStatus('Event deleted and approved.');
+      } else {
+        setStatus('Event deletion submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete event.');
@@ -699,10 +756,17 @@ export default function App() {
         activity_payload: activityPayload,
         body: contentForm.body.trim() || null,
       };
-      const { error: upsertError } = await supabase.from('educational_contents').upsert(payload, { onConflict: 'id' });
-      if (upsertError) throw upsertError;
-      await loadAll(sessionUser, profile);
-      setStatus('Educational content saved.');
+      const operationType = selectedContentId ? 'update' : 'add';
+      const { approved } = await createOrApproveQueueEntry(operationType, 'educational_contents', selectedContentId, payload, sessionUser, profile);
+      
+      if (approved) {
+        const { error: upsertError } = await supabase.from('educational_contents').upsert(payload, { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+        await loadAll(sessionUser, profile);
+        setStatus('Educational content saved and approved.');
+      } else {
+        setStatus('Educational content submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to save content.');
@@ -716,11 +780,18 @@ export default function App() {
     if (!selectedContentId) return false;
     setSaving(true);
     try {
-      const { error: deleteError } = await supabase.from('educational_contents').delete().eq('id', selectedContentId);
-      if (deleteError) throw deleteError;
-      setSelectedContentId(null);
-      await loadAll(sessionUser, profile);
-      setStatus('Educational content deleted.');
+      const contentRow = contents.find((x) => x.id === selectedContentId) || { id: selectedContentId };
+      const { approved } = await createOrApproveQueueEntry('delete', 'educational_contents', selectedContentId, contentRow, sessionUser, profile);
+      
+      if (approved) {
+        const { error: deleteError } = await supabase.from('educational_contents').delete().eq('id', selectedContentId);
+        if (deleteError) throw deleteError;
+        setSelectedContentId(null);
+        await loadAll(sessionUser, profile);
+        setStatus('Educational content deleted and approved.');
+      } else {
+        setStatus('Educational content deletion submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete content.');
@@ -740,15 +811,20 @@ export default function App() {
         email: userForm.email.trim() || null,
         phone: userForm.phone.trim() || null,
         gender: userForm.gender.trim() || null,
-        medical_history: userForm.medical_history.trim() || null,
-        role: userForm.role,
+        role: userForm.is_admin ? (userForm.role || 'Mental Health Consultant') : null,
         is_admin: userForm.is_admin,
         is_active: userForm.is_active,
       };
-      const { error: upsertError } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-      if (upsertError) throw upsertError;
-      await loadAll(sessionUser, profile);
-      setStatus('User profile updated.');
+      const { approved } = await createOrApproveQueueEntry('update', 'profiles', selectedUserId, payload, sessionUser, profile);
+      
+      if (approved) {
+        const { error: upsertError } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+        await loadAll(sessionUser, profile);
+        setStatus('User profile updated and approved.');
+      } else {
+        setStatus('User profile change submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to save user.');
@@ -762,11 +838,18 @@ export default function App() {
     if (!selectedUserId) return false;
     setSaving(true);
     try {
-      const { error: deleteError } = await supabase.from('profiles').delete().eq('id', selectedUserId);
-      if (deleteError) throw deleteError;
-      setSelectedUserId(null);
-      await loadAll(sessionUser, profile);
-      setStatus('Profile row deleted.');
+      const userRow = users.find((x) => x.id === selectedUserId) || { id: selectedUserId };
+      const { approved } = await createOrApproveQueueEntry('delete', 'profiles', selectedUserId, userRow, sessionUser, profile);
+      
+      if (approved) {
+        const { error: deleteError } = await supabase.from('profiles').delete().eq('id', selectedUserId);
+        if (deleteError) throw deleteError;
+        setSelectedUserId(null);
+        await loadAll(sessionUser, profile);
+        setStatus('Profile row deleted and approved.');
+      } else {
+        setStatus('Profile deletion submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete profile row.');
@@ -804,11 +887,17 @@ export default function App() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error: upsertError } = await supabase.from('wellbeing_questions').upsert(payload, { onConflict: 'id' });
-      if (upsertError) throw upsertError;
-
-      await loadAll(sessionUser, profile);
-      setStatus('Wellbeing question saved.');
+      const operationType = selectedQuestionId ? 'update' : 'add';
+      const { approved } = await createOrApproveQueueEntry(operationType, 'wellbeing_questions', selectedQuestionId, payload, sessionUser, profile);
+      
+      if (approved) {
+        const { error: upsertError } = await supabase.from('wellbeing_questions').upsert(payload, { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+        await loadAll(sessionUser, profile);
+        setStatus('Wellbeing question saved and approved.');
+      } else {
+        setStatus('Wellbeing question submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to save wellbeing question.');
@@ -823,16 +912,22 @@ export default function App() {
 
     setSaving(true);
     try {
-      const { error: deleteError } = await supabase
-        .from('wellbeing_questions')
-        .delete()
-        .eq('id', selectedQuestionId);
+      const questionRow = wellbeingQuestions.find((x) => x.id === selectedQuestionId) || { id: selectedQuestionId };
+      const { approved } = await createOrApproveQueueEntry('delete', 'wellbeing_questions', selectedQuestionId, questionRow, sessionUser, profile);
+      
+      if (approved) {
+        const { error: deleteError } = await supabase
+          .from('wellbeing_questions')
+          .delete()
+          .eq('id', selectedQuestionId);
 
-      if (deleteError) throw deleteError;
-
-      setSelectedQuestionId(null);
-      await loadAll(sessionUser, profile);
-      setStatus('Wellbeing question deleted.');
+        if (deleteError) throw deleteError;
+        setSelectedQuestionId(null);
+        await loadAll(sessionUser, profile);
+        setStatus('Wellbeing question deleted and approved.');
+      } else {
+        setStatus('Wellbeing question deletion submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to delete wellbeing question.');
@@ -855,35 +950,43 @@ export default function App() {
     setSaving(true);
     try {
       const payload = {
+        id: selectedClinicalToolId || undefined,
         code: clinicalToolForm.code.trim(),
         name: clinicalToolForm.name.trim(),
         description: clinicalToolForm.description.trim() || null,
         is_active: clinicalToolForm.is_active,
       };
 
-      let saveError = null;
-      if (selectedClinicalToolId) {
-        const { error: updateError } = await supabase
-          .from('clinical_tools')
-          .update(payload)
-          .eq('id', selectedClinicalToolId);
-        saveError = updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('clinical_tools')
-          .insert(payload);
-        saveError = insertError;
-      }
-
-      if (saveError) {
-        if (isMissingColumnError(saveError)) {
-          throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+      const operationType = selectedClinicalToolId ? 'update' : 'add';
+      const { approved } = await createOrApproveQueueEntry(operationType, 'clinical_tools', selectedClinicalToolId, payload, sessionUser, profile);
+      
+      if (approved) {
+        let saveError = null;
+        if (selectedClinicalToolId) {
+          const { error: updateError } = await supabase
+            .from('clinical_tools')
+            .update(payload)
+            .eq('id', selectedClinicalToolId);
+          saveError = updateError;
+        } else {
+          const { error: insertError } = await supabase
+            .from('clinical_tools')
+            .insert(payload);
+          saveError = insertError;
         }
-        throw saveError;
-      }
 
-      await loadAll(sessionUser, profile);
-      setStatus(selectedClinicalToolId ? 'Self-assessment tool updated.' : 'Self-assessment tool created.');
+        if (saveError) {
+          if (isMissingColumnError(saveError)) {
+            throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+          }
+          throw saveError;
+        }
+
+        await loadAll(sessionUser, profile);
+        setStatus(selectedClinicalToolId ? 'Self-assessment tool updated and approved.' : 'Self-assessment tool created and approved.');
+      } else {
+        setStatus(selectedClinicalToolId ? 'Tool update submitted for approval.' : 'New tool submitted for approval.');
+      }
       return true;
     } catch (e) {
       setError(e?.message || 'Failed to save self-assessment tool.');
@@ -898,27 +1001,40 @@ export default function App() {
     setSaving(true);
     setError('');
     try {
-      const { error: updateError } = await supabase
-        .from('clinical_tools')
-        .update({ is_active: nextActive })
-        .eq('id', item.id);
+      const payload = {
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        is_active: nextActive,
+      };
 
-      if (updateError) {
-        if (isMissingColumnError(updateError)) {
-          throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+      const { approved } = await createOrApproveQueueEntry('update', 'clinical_tools', item.id, payload, sessionUser, profile);
+
+      if (approved) {
+        const { error: updateError } = await supabase
+          .from('clinical_tools')
+          .update({ is_active: nextActive })
+          .eq('id', item.id);
+
+        if (updateError) {
+          if (isMissingColumnError(updateError)) {
+            throw new Error('Missing column clinical_tools.is_active. Please run clinical_tools_admin.sql first.');
+          }
+          throw updateError;
         }
-        throw updateError;
+
+        setClinicalTools((prev) => prev.map((tool) => (
+          tool.id === item.id ? { ...tool, is_active: nextActive } : tool
+        )));
+
+        if (selectedClinicalToolId === item.id) {
+          setClinicalToolForm((prev) => ({ ...prev, is_active: nextActive }));
+        }
+
+        setStatus(`Tool ${item.code || item.name || ''} is now ${nextActive ? 'enabled' : 'disabled'}.`);
+      } else {
+        setStatus('Tool status change submitted for approval.');
       }
-
-      setClinicalTools((prev) => prev.map((tool) => (
-        tool.id === item.id ? { ...tool, is_active: nextActive } : tool
-      )));
-
-      if (selectedClinicalToolId === item.id) {
-        setClinicalToolForm((prev) => ({ ...prev, is_active: nextActive }));
-      }
-
-      setStatus(`Tool ${item.code || item.name || ''} is now ${nextActive ? 'enabled' : 'disabled'}.`);
     } catch (e) {
       setError(e?.message || 'Failed to update tool status.');
     } finally {
@@ -934,30 +1050,40 @@ export default function App() {
     setSaving(true);
     setError('');
     try {
-      console.log(`Toggling question ${item.id} to ${nextActive}`);
-      const { error: updateError, data } = await supabase
-        .from('wellbeing_questions')
-        .update({ is_active: nextActive })
-        .eq('id', item.id);
+      const payload = {
+        id: item.id,
+        category: item.category,
+        prompt: item.prompt,
+        is_active: nextActive,
+      };
 
-      if (updateError) {
-        console.error('Database update error:', updateError);
-        if (isMissingColumnError(updateError)) {
-          throw new Error('Missing column wellbeing_questions.is_active. Please run the database migration.');
+      const { approved } = await createOrApproveQueueEntry('update', 'wellbeing_questions', item.id, payload, sessionUser, profile);
+
+      if (approved) {
+        const { error: updateError } = await supabase
+          .from('wellbeing_questions')
+          .update({ is_active: nextActive })
+          .eq('id', item.id);
+
+        if (updateError) {
+          if (isMissingColumnError(updateError)) {
+            throw new Error('Missing column wellbeing_questions.is_active. Please run the database migration.');
+          }
+          throw updateError;
         }
-        throw updateError;
+
+        setWellbeingQuestions((prev) => prev.map((question) => (
+          question.id === item.id ? { ...question, is_active: nextActive } : question
+        )));
+
+        if (selectedQuestionId === item.id) {
+          setQuestionForm((prev) => ({ ...prev, is_active: nextActive }));
+        }
+
+        setStatus(`Question is now ${nextActive ? 'enabled' : 'disabled'}.`);
+      } else {
+        setStatus('Question status change submitted for approval.');
       }
-
-      console.log('Update successful:', data);
-      setWellbeingQuestions((prev) => prev.map((question) => (
-        question.id === item.id ? { ...question, is_active: nextActive } : question
-      )));
-
-      if (selectedQuestionId === item.id) {
-        setQuestionForm((prev) => ({ ...prev, is_active: nextActive }));
-      }
-
-      setStatus(`Question is now ${nextActive ? 'enabled' : 'disabled'}.`);
     } catch (e) {
       console.error('Toggle question error:', e);
       setError(e?.message || 'Failed to update question status.');
@@ -985,21 +1111,143 @@ export default function App() {
     setSaving(true);
     setError('');
     try {
+      const payload = {
+        id: selectedToolQuestionId,
+        question_order: questionOrder,
+        question_text: toolQuestionForm.question_text.trim(),
+        options: parsedOptions,
+      };
+
+      const { approved } = await createOrApproveQueueEntry('update', 'clinical_tool_questions', selectedToolQuestionId, payload, sessionUser, profile);
+
+      if (approved) {
+        const { error: updateError } = await supabase
+          .from('clinical_tool_questions')
+          .update({
+            question_order: questionOrder,
+            question_text: toolQuestionForm.question_text.trim(),
+            options: parsedOptions,
+          })
+          .eq('id', selectedToolQuestionId);
+
+        if (updateError) throw updateError;
+
+        await loadAll(sessionUser, profile);
+        setStatus('Question updated and approved.');
+      } else {
+        setStatus('Tool question update submitted for approval.');
+      }
+    } catch (e) {
+      setError(e?.message || 'Failed to update question.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function approveApprovalItem(itemId) {
+    if (!itemId) return;
+    setSaving(true);
+    setError('');
+    setStatus('');
+    try {
+      if (!isHeadRole(profile?.role)) {
+        throw new Error('Only head roles can approve or reject requests.');
+      }
+
+      const item = approvalItems.find((x) => x.id === itemId);
+      if (!item) throw new Error('Approval item not found.');
+
+      const APPLICATION_MANAGER_TABLES = new Set(['events', 'educational_contents', 'profiles']);
+      const MENTAL_HEALTH_TABLES = new Set(['wellbeing_questions', 'clinical_tools', 'clinical_tool_questions']);
+      const headRole = profile?.role;
+      const tableName = item?.table_name;
+
+      const isAllowedTable =
+        (headRole === 'Head of Application Manager' && APPLICATION_MANAGER_TABLES.has(tableName)) ||
+        (headRole === 'Head of Mental Health Consultant' && MENTAL_HEALTH_TABLES.has(tableName));
+
+      if (!isAllowedTable) {
+        throw new Error('You can only approve/reject requests from your own department.');
+      }
+
+      const now = new Date().toISOString();
       const { error: updateError } = await supabase
-        .from('clinical_tool_questions')
+        .from('approval_queue')
         .update({
-          question_order: questionOrder,
-          question_text: toolQuestionForm.question_text.trim(),
-          options: parsedOptions,
+          status: 'approved',
+          approved_at: now,
+          approved_by: sessionUser.id,
         })
-        .eq('id', selectedToolQuestionId);
+        .eq('id', itemId);
+
+      if (updateError) throw updateError;
+
+      // If approved by head, also apply the operation to the actual table
+      if (item.operation_type === 'add' || item.operation_type === 'update') {
+        const { error: applyError } = await supabase
+          .from(item.table_name)
+          .upsert(item.record_data, { onConflict: 'id' });
+        if (applyError) throw applyError;
+      } else if (item.operation_type === 'delete' && item.record_id) {
+        const { error: deleteError } = await supabase
+          .from(item.table_name)
+          .delete()
+          .eq('id', item.record_id);
+        if (deleteError) throw deleteError;
+      }
+
+      await loadAll(sessionUser, profile);
+      setStatus('Approval item approved and applied.');
+    } catch (e) {
+      setError(e?.message || 'Failed to approve item.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function rejectApprovalItem(itemId, reason = '') {
+    if (!itemId) return;
+    setSaving(true);
+    setError('');
+    setStatus('');
+    try {
+      if (!isHeadRole(profile?.role)) {
+        throw new Error('Only head roles can approve or reject requests.');
+      }
+
+      const item = approvalItems.find((x) => x.id === itemId);
+      if (!item) throw new Error('Approval item not found.');
+
+      const APPLICATION_MANAGER_TABLES = new Set(['events', 'educational_contents', 'profiles']);
+      const MENTAL_HEALTH_TABLES = new Set(['wellbeing_questions', 'clinical_tools', 'clinical_tool_questions']);
+      const headRole = profile?.role;
+      const tableName = item?.table_name;
+
+      const isAllowedTable =
+        (headRole === 'Head of Application Manager' && APPLICATION_MANAGER_TABLES.has(tableName)) ||
+        (headRole === 'Head of Mental Health Consultant' && MENTAL_HEALTH_TABLES.has(tableName));
+
+      if (!isAllowedTable) {
+        throw new Error('You can only approve/reject requests from your own department.');
+      }
+
+      const now = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from('approval_queue')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason || null,
+          approved_at: now,
+          approved_by: sessionUser.id,
+        })
+        .eq('id', itemId);
 
       if (updateError) throw updateError;
 
       await loadAll(sessionUser, profile);
-      setStatus('Question updated.');
+      setStatus('Approval item rejected.');
     } catch (e) {
-      setError(e?.message || 'Failed to update question.');
+      setError(e?.message || 'Failed to reject item.');
     } finally {
       setSaving(false);
     }
@@ -1024,6 +1272,7 @@ export default function App() {
     <>
       <AdminDashboardLayout
         signedInName={signedInName}
+        signedInRole={signedInRole}
         onRefresh={() => loadAll()}
         onLogout={onLogout}
         tab={tab}
@@ -1034,6 +1283,7 @@ export default function App() {
         error={error}
         content={(
           <AdminDashboardContent
+            signedInRole={signedInRole}
             tab={tab}
             setTab={setTab}
             kpis={dashboardKpis}
@@ -1096,6 +1346,9 @@ export default function App() {
             toolQuestionForm={toolQuestionForm}
             setToolQuestionForm={setToolQuestionForm}
             saveSelectedToolQuestion={saveSelectedToolQuestion}
+            approvalItems={approvalItems}
+            approveApprovalItem={approveApprovalItem}
+            rejectApprovalItem={rejectApprovalItem}
           />
         )}
         logoSrc={mindLogo}

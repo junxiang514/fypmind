@@ -1,6 +1,10 @@
 import React from 'react';
 
+const MENTAL_HEALTH_ROLES = new Set(['Mental Health Consultant', 'Head of Mental Health Consultant']);
+const APPLICATION_MANAGER_ROLES = new Set(['Application Manager', 'Head of Application Manager']);
+
 export default function AdminRecordList({
+  signedInRole,
   tab,
   filteredEvents,
   filteredContents,
@@ -74,7 +78,9 @@ export default function AdminRecordList({
                 <span>{Array.isArray(item.activity_payload) ? `${item.activity_payload.length} activities` : '0 activities'}</span>
               </div>
             </button>
-            <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedContentId(item.id); onEditContent && onEditContent(item.id); }}>Edit</button>
+                  {APPLICATION_MANAGER_ROLES.has(signedInRole) && (
+                    <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedContentId(item.id); onEditContent && onEditContent(item.id); }}>Edit</button>
+                  )}
           </div>
         );
       })}
@@ -89,9 +95,11 @@ export default function AdminRecordList({
               <span>{item.gender || 'No gender'}</span>
               <span>{item.is_active ? 'Active' : 'Inactive'}</span>
             </div>
-            {shortText(item.medical_history) && <small className="list-item-preview">{shortText(item.medical_history)}</small>}
+            {/* medical_history preview removed */}
           </button>
-          <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedUserId(item.id); onEditUser && onEditUser(item.id); }}>Edit</button>
+          {APPLICATION_MANAGER_ROLES.has(signedInRole) && (
+            <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedUserId(item.id); onEditUser && onEditUser(item.id); }}>Edit</button>
+          )}
         </div>
       ))}
 
@@ -104,7 +112,9 @@ export default function AdminRecordList({
               <span>{item.category || 'General'}</span>
             </div>
           </button>
-          <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedQuestionId(item.id); onEditQuestion && onEditQuestion(item.id); }}>Edit</button>
+            {MENTAL_HEALTH_ROLES.has(signedInRole) && (
+              <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedQuestionId(item.id); onEditQuestion && onEditQuestion(item.id); }}>Edit</button>
+            )}
         </div>
       ))}
 
@@ -126,13 +136,15 @@ export default function AdminRecordList({
                 <span>{submissionCount} Submissions</span>
               </div>
             </button>
-            <button
-              type="button"
-              className="btn light tiny-btn"
-              onClick={() => { setSelectedClinicalToolId(item.id); onEditClinicalTool && onEditClinicalTool(item.id); }}
-            >
-              Edit
-            </button>
+            {MENTAL_HEALTH_ROLES.has(signedInRole) && (
+              <button
+                type="button"
+                className="btn light tiny-btn"
+                onClick={() => { setSelectedClinicalToolId(item.id); onEditClinicalTool && onEditClinicalTool(item.id); }}
+              >
+                Edit
+              </button>
+            )}
           </div>
         );
       })}

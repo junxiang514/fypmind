@@ -71,7 +71,6 @@ export function buildFallbackProfile(user, profile) {
     email: profile?.email || user?.email || '',
     phone: '',
     gender: '',
-    medical_history: '',
     role: profile?.role || 'admin',
     is_admin: true,
     is_active: true,

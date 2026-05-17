@@ -237,20 +237,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Medical Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Medical Information</Text>
-          {/* ...existing code... */}
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Ionicons name="medical-outline" size={20} color="#666" style={styles.infoIcon} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Medical History</Text>
-                <Text style={styles.infoValue}>{userProfile?.medical_history || 'None'}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* Medical Information removed */}
 
         {/* Action Buttons */}
         <View style={styles.section}>

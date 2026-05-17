@@ -10,6 +10,7 @@ import WellbeingQuestionsEditor, {
 } from './WellbeingQuestionsEditor';
 import ClinicalToolsEditor, { EMPTY_CLINICAL_TOOL } from './ClinicalToolsEditor';
 import AdminRecordList from './AdminRecordList';
+import ApprovalReviewPage from './ApprovalReviewPage';
 
 function KpiMetric({ icon, label, value, onClick }) {
   return (
@@ -135,7 +136,12 @@ function HomeDashboardPage({
   );
 }
 
+const MENTAL_HEALTH_ROLES = new Set(['Mental Health Consultant', 'Head of Mental Health Consultant']);
+const APPLICATION_MANAGER_ROLES = new Set(['Application Manager', 'Head of Application Manager']);
+const HEAD_ROLES = new Set(['Head of Mental Health Consultant', 'Head of Application Manager']);
+
 export default function AdminDashboardContent({
+  signedInRole,
   tab,
   setTab,
   kpis,
@@ -198,8 +204,19 @@ export default function AdminDashboardContent({
   toolQuestionForm,
   setToolQuestionForm,
   saveSelectedToolQuestion,
+  approvalItems,
+  approveApprovalItem,
+  rejectApprovalItem,
 }) {
   const [selectedQuestionCategory, setSelectedQuestionCategory] = React.useState(null);
+  const canApproveRequests = HEAD_ROLES.has(signedInRole);
+  const APPLICATION_MANAGER_TABLES = new Set(['events', 'educational_contents', 'profiles']);
+  const MENTAL_HEALTH_TABLES = new Set(['wellbeing_questions', 'clinical_tools', 'clinical_tool_questions']);
+  const scopedApprovalItems = (approvalItems || []).filter((item) => {
+    if (signedInRole === 'Head of Application Manager') return APPLICATION_MANAGER_TABLES.has(item.table_name);
+    if (signedInRole === 'Head of Mental Health Consultant') return MENTAL_HEALTH_TABLES.has(item.table_name);
+    return true;
+  });
 
   const showFloatingAddButton = tab !== 'dashboard' && tab !== 'users';
   const addButtonLabel = {
@@ -210,6 +227,14 @@ export default function AdminDashboardContent({
   }[tab] || 'Add';
 
   const openAddModal = () => {
+    const canEdit = (t) => {
+      if (!signedInRole) return false;
+      if (['questions', 'clinical-tools'].includes(t)) return MENTAL_HEALTH_ROLES.has(signedInRole);
+      if (['contents', 'events', 'users'].includes(t)) return APPLICATION_MANAGER_ROLES.has(signedInRole);
+      return false;
+    };
+
+    if (!canEdit(tab)) return;
     if (tab === 'events') {
       setSelectedEventId(null);
       setEventForm(EMPTY_EVENT);
@@ -244,6 +269,7 @@ export default function AdminDashboardContent({
   const pageMeta = {
     events: { title: 'Events', subtitle: 'Manage upcoming and past events in one place.' },
     contents: { title: 'Educational Content', subtitle: 'Review and update learning resources.' },
+    approvals: { title: 'Approval Review', subtitle: 'Review and approve pending submissions.' },
     questions: { title: 'Check-ins Question', subtitle: 'Manage the daily wellbeing check-in questions.' },
     'clinical-tools': { title: 'Self-Assessment Tools', subtitle: 'Create and maintain assessment tool sets.' },
     users: { title: 'Users', subtitle: 'View and manage user profiles.' },
@@ -257,6 +283,33 @@ export default function AdminDashboardContent({
         topEducationalContentBySubmissions={topEducationalContentBySubmissions}
         onTabChange={setTab}
       />
+    );
+  }
+
+  if (tab === 'approvals') {
+    return (
+      <section className="dashboard-home" style={{ gap: '8px' }}>
+        <div className="dashboard-home-header">
+          <div className="dashboard-home-header-main">
+            <h2>{pageMeta.title}</h2>
+            <p>{pageMeta.subtitle}</p>
+          </div>
+        </div>
+        <ApprovalReviewPage
+          approvalItems={scopedApprovalItems}
+          approveApprovalItem={approveApprovalItem}
+          rejectApprovalItem={rejectApprovalItem}
+          saving={saving}
+          canApprove={canApproveRequests}
+          currentRecords={{
+            events: filteredEvents,
+            educational_contents: filteredContents,
+            profiles: filteredUsers,
+            wellbeing_questions: filteredQuestions,
+            clinical_tools: filteredClinicalTools,
+          }}
+        />
+      </section>
     );
   }
 
@@ -330,6 +383,7 @@ export default function AdminDashboardContent({
           ))}
         </div>
         <AdminRecordList
+            signedInRole={signedInRole}
           tab={tab}
           filteredEvents={filteredEvents}
           filteredContents={filteredContents}
@@ -358,6 +412,7 @@ export default function AdminDashboardContent({
       </div>
     ) : (
       <AdminRecordList
+        signedInRole={signedInRole}
         tab={tab}
         filteredEvents={filteredEvents}
         filteredContents={filteredContents}
@@ -460,7 +515,7 @@ export default function AdminDashboardContent({
             <h2>{pageMeta.title}</h2>
             <p>{pageMeta.subtitle}</p>
           </div>
-          {showFloatingAddButton && (
+          {showFloatingAddButton && signedInRole && ((['questions','clinical-tools'].includes(tab) && MENTAL_HEALTH_ROLES.has(signedInRole)) || (['contents','events','users'].includes(tab) && APPLICATION_MANAGER_ROLES.has(signedInRole))) && (
             <button type="button" className="header-add-button" onClick={openAddModal}>
               <span className="header-add-plus">+</span>
               <span>{addButtonLabel}</span>

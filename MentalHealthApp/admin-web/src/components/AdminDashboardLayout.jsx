@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { key: 'questions', label: 'Check-ins Question' },
   { key: 'clinical-tools', label: 'Self-Assessment Tools' },
   { key: 'users', label: 'Users' },
+  { key: 'approvals', label: 'Approval Review' },
 ];
 
 function getInitials(name) {
@@ -22,6 +23,7 @@ function getInitials(name) {
 
 export default function AdminDashboardLayout({
   signedInName,
+  signedInRole,
   onRefresh,
   onLogout,
   tab,
@@ -120,7 +122,7 @@ export default function AdminDashboardLayout({
               <div className="admin-avatar">{initials}</div>
               <div className="topbar-profile-text">
                 <div className="admin-profile-name">{signedInName}</div>
-                <div className="admin-profile-role">Admin</div>
+                <div className="admin-profile-role">{signedInRole}</div>
               </div>
             </div>
           </div>

@@ -64,7 +64,6 @@ export default function EditProfileScreen({ navigation, route }) {
   const [phone, setPhone] = useState('+60');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
-  const [medicalHistory, setMedicalHistory] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDobPicker, setShowDobPicker] = useState(false);
 
@@ -87,7 +86,7 @@ export default function EditProfileScreen({ navigation, route }) {
         setPhone(normalizePhoneWithMalaysiaPrefix(profile?.phone || '+60'));
         setDateOfBirth(profile?.date_of_birth || '');
         setGender(profile?.gender || '');
-        setMedicalHistory(profile?.medical_history || '');
+    
       } catch (e) {
         Alert.alert('Error', e?.message ?? 'Failed to load profile');
       } finally {
@@ -137,7 +136,7 @@ export default function EditProfileScreen({ navigation, route }) {
         phone: normalizePhoneWithMalaysiaPrefix(phone).trim(),
         date_of_birth: dateOfBirth.trim(),
         gender: gender.trim(),
-        medical_history: medicalHistory.trim(),
+        
       });
       Alert.alert('Success', 'Profile updated successfully', [
         {
@@ -291,22 +290,7 @@ export default function EditProfileScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* Medical History */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Medical History</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="medical-outline" size={18} color="#999" style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, styles.multilineInput]}
-                placeholder="Enter any relevant medical history"
-                value={medicalHistory}
-                onChangeText={setMedicalHistory}
-                multiline
-                numberOfLines={3}
-                editable={!loading}
-              />
-            </View>
-          </View>
+          {/* Medical History removed */}
 
           {/* Save Button */}
           <TouchableOpacity

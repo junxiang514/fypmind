@@ -19,15 +19,35 @@ export default function UserEditor({ userForm, setUserForm, saving, selectedUser
       <input value={userForm.phone} onChange={(e) => setUserForm((s) => ({ ...s, phone: e.target.value }))} />
       <label>Gender</label>
       <input value={userForm.gender} onChange={(e) => setUserForm((s) => ({ ...s, gender: e.target.value }))} />
-      <label>Role</label>
-      <select value={userForm.role} onChange={(e) => setUserForm((s) => ({ ...s, role: e.target.value }))}>
-        <option value="user">user</option>
-        <option value="admin">admin</option>
-      </select>
-      <label>Medical history</label>
-      <textarea value={userForm.medical_history} onChange={(e) => setUserForm((s) => ({ ...s, medical_history: e.target.value }))} />
+      <div className="admin-toggle-row">
+        <div className="admin-toggle-label">Admin Access</div>
+        <label className="switch" aria-label="Toggle admin">
+          <input
+            type="checkbox"
+            checked={userForm.is_admin}
+            onChange={(e) =>
+              setUserForm((s) => ({
+                ...s,
+                is_admin: e.target.checked,
+                role: e.target.checked ? (s.role || 'Mental Health Consultant') : null,
+              }))
+            }
+          />
+          <span className="slider" />
+        </label>
+      </div>
+
+      <div className={`role-collapsible ${userForm.is_admin ? 'open' : ''}`}>
+        <label>Role</label>
+        <select value={userForm.role || 'Mental Health Consultant'} onChange={(e) => setUserForm((s) => ({ ...s, role: e.target.value }))}>
+          <option value="Mental Health Consultant">Mental Health Consultant</option>
+          <option value="Head of Mental Health Consultant">Head of Mental Health Consultant</option>
+          <option value="Application Manager">Application Manager</option>
+          <option value="Head of Application Manager">Head of Application Manager</option>
+        </select>
+      </div>
+      {/* medical_history removed */}
       <div className="checks">
-        <label><input type="checkbox" checked={userForm.is_admin} onChange={(e) => setUserForm((s) => ({ ...s, is_admin: e.target.checked }))} /> is_admin</label>
         <label><input type="checkbox" checked={userForm.is_active} onChange={(e) => setUserForm((s) => ({ ...s, is_active: e.target.checked }))} /> is_active</label>
       </div>
         </div>

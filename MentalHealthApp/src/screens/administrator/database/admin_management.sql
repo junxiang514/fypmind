@@ -24,12 +24,146 @@ as $$
   );
 $$;
 
+-- 3a) Function used to restrict approvals to head roles
+create or replace function public.is_head_admin(uid uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and lower(coalesce(p.role, '')) in (
+        lower('Head of Mental Health Consultant'),
+        lower('Head of Application Manager')
+      )
+  );
+$$;
+
+create or replace function public.is_head_application_manager(uid uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and lower(coalesce(p.role, '')) = lower('Head of Application Manager')
+  );
+$$;
+
+create or replace function public.is_head_mental_health_consultant(uid uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and lower(coalesce(p.role, '')) = lower('Head of Mental Health Consultant')
+  );
+$$;
+
 alter table public.events enable row level security;
 alter table public.educational_contents enable row level security;
 alter table public.profiles enable row level security;
 alter table public.educational_content_progress enable row level security;
 alter table public.clinical_tool_responses enable row level security;
+alter table public.clinical_tools enable row level security;
+alter table public.wellbeing_questions enable row level security;
 
+-- 3a) Create approval_queue table
+create table if not exists public.approval_queue (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  operation_type text not null check (operation_type in ('add', 'delete', 'update')),
+  table_name text not null,
+  record_id uuid,
+  record_data jsonb not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamp not null default now(),
+  approved_at timestamp,
+  approved_by uuid references auth.users(id) on delete set null,
+  rejection_reason text,
+  created_by_name text,
+  updated_at timestamp not null default now()
+);
+
+create index if not exists approval_queue_status_idx on public.approval_queue(status);
+create index if not exists approval_queue_user_idx on public.approval_queue(user_id);
+create index if not exists approval_queue_table_idx on public.approval_queue(table_name);
+
+alter table public.approval_queue enable row level security;
+
+create policy "approval queue admin read"
+on public.approval_queue
+for select
+using (
+  public.is_admin(auth.uid())
+  and (
+    user_id = auth.uid()
+    or (
+      public.is_head_application_manager(auth.uid())
+      and table_name in ('events', 'educational_contents', 'profiles')
+    )
+    or (
+      public.is_head_mental_health_consultant(auth.uid())
+      and table_name in ('wellbeing_questions', 'clinical_tools', 'clinical_tool_questions')
+    )
+  )
+);
+
+drop policy if exists "approval queue admin write" on public.approval_queue;
+drop policy if exists "approval queue admin insert" on public.approval_queue;
+drop policy if exists "approval queue head update" on public.approval_queue;
+
+-- Any admin can create a pending request.
+-- Head admins can also insert auto-approved requests for their own operations.
+create policy "approval queue admin insert"
+on public.approval_queue
+for insert
+with check (
+  public.is_admin(auth.uid())
+  and (
+    (status = 'pending' and approved_at is null and approved_by is null)
+    or (
+      public.is_head_application_manager(auth.uid())
+      and table_name in ('events', 'educational_contents', 'profiles')
+      and status = 'approved'
+      and approved_by = auth.uid()
+    )
+    or (
+      public.is_head_mental_health_consultant(auth.uid())
+      and table_name in ('wellbeing_questions', 'clinical_tools', 'clinical_tool_questions')
+      and status = 'approved'
+      and approved_by = auth.uid()
+    )
+  )
+);
+
+-- Only head roles can approve/reject (update status).
+create policy "approval queue head update"
+on public.approval_queue
+for update
+using (
+  public.is_head_application_manager(auth.uid())
+  and table_name in ('events', 'educational_contents', 'profiles')
+  or (
+    public.is_head_mental_health_consultant(auth.uid())
+    and table_name in ('wellbeing_questions', 'clinical_tools', 'clinical_tool_questions')
+  )
+)
+with check (
+  public.is_head_application_manager(auth.uid())
+  and table_name in ('events', 'educational_contents', 'profiles')
+  or (
+    public.is_head_mental_health_consultant(auth.uid())
+    and table_name in ('wellbeing_questions', 'clinical_tools', 'clinical_tool_questions')
+  )
+);
 
 drop policy if exists "events public read" on public.events;
 drop policy if exists "educational public read" on public.educational_contents;

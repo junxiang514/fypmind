@@ -19,7 +19,7 @@ export async function fetchMyProfile() {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, email, phone, date_of_birth, gender, medical_history, avatar_url, updated_at')
+    .select('id, full_name, email, phone, date_of_birth, gender, avatar_url, updated_at')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -34,14 +34,14 @@ export async function fetchMyProfile() {
     phone: '',
     date_of_birth: null,
     gender: '',
-    medical_history: '',
+    
     avatar_url: null,
   };
 
   const { data: inserted, error: insertError } = await supabase
     .from('profiles')
     .upsert(fallback, { onConflict: 'id' })
-    .select('id, full_name, email, phone, date_of_birth, gender, medical_history, avatar_url, updated_at')
+    .select('id, full_name, email, phone, date_of_birth, gender, avatar_url, updated_at')
     .single();
 
   if (insertError) throw insertError;
@@ -61,7 +61,7 @@ export async function updateMyProfile(patch) {
   const { data, error } = await supabase
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('id, full_name, email, phone, date_of_birth, gender, medical_history, avatar_url, updated_at')
+    .select('id, full_name, email, phone, date_of_birth, gender, avatar_url, updated_at')
     .single();
 
   if (error) throw error;
