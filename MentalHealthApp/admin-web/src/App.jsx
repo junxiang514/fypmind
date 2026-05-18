@@ -153,7 +153,7 @@ export default function App() {
           .limit(1000),
         (publicReadClient || supabase)
           .from('wellbeing_questions')
-          .select('id, category, prompt, answer_type, options, is_active, created_at, updated_at')
+          .select('id, category, prompt, answer_type, options, is_active, created_by, verified_by, created_at, updated_at')
           .order('updated_at', { ascending: false })
           .limit(2000),
         (publicReadClient || supabase)
@@ -891,7 +891,13 @@ export default function App() {
       const { approved } = await createOrApproveQueueEntry(operationType, 'wellbeing_questions', selectedQuestionId, payload, sessionUser, profile);
       
       if (approved) {
-        const { error: upsertError } = await supabase.from('wellbeing_questions').upsert(payload, { onConflict: 'id' });
+        const applyPayload = {
+          ...payload,
+          ...(operationType === 'add' ? { created_by: sessionUser.id } : null),
+          verified_by: sessionUser.id,
+        };
+
+        const { error: upsertError } = await supabase.from('wellbeing_questions').upsert(applyPayload, { onConflict: 'id' });
         if (upsertError) throw upsertError;
         await loadAll(sessionUser, profile);
         setStatus('Wellbeing question saved and approved.');
@@ -1062,7 +1068,7 @@ export default function App() {
       if (approved) {
         const { error: updateError } = await supabase
           .from('wellbeing_questions')
-          .update({ is_active: nextActive })
+          .update({ is_active: nextActive, verified_by: sessionUser.id, updated_at: new Date().toISOString() })
           .eq('id', item.id);
 
         if (updateError) {
@@ -1184,9 +1190,25 @@ export default function App() {
 
       // If approved by head, also apply the operation to the actual table
       if (item.operation_type === 'add' || item.operation_type === 'update') {
+        let recordDataToApply = item.record_data;
+
+        // Special: check-in questions should track creator + verifier.
+        if (item.table_name === 'wellbeing_questions') {
+          const nowIso = new Date().toISOString();
+          recordDataToApply = {
+            ...recordDataToApply,
+            verified_by: sessionUser.id,
+            updated_at: recordDataToApply?.updated_at || nowIso,
+          };
+
+          if (item.operation_type === 'add' && recordDataToApply?.created_by === undefined) {
+            recordDataToApply.created_by = item.user_id;
+          }
+        }
+
         const { error: applyError } = await supabase
           .from(item.table_name)
-          .upsert(item.record_data, { onConflict: 'id' });
+          .upsert(recordDataToApply, { onConflict: 'id' });
         if (applyError) throw applyError;
       } else if (item.operation_type === 'delete' && item.record_id) {
         const { error: deleteError } = await supabase

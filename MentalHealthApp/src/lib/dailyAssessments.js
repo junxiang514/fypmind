@@ -22,7 +22,7 @@ async function getCurrentUserId() {
 export async function listActiveWellbeingQuestions() {
   const { data, error } = await supabase
     .from('wellbeing_questions')
-    .select('id, category, prompt, answer_type, options, is_active')
+    .select('id, category, prompt, answer_type, options, is_active, created_by, verified_by')
     .eq('is_active', true)
     .order('category', { ascending: true })
     .order('created_at', { ascending: true });
@@ -33,6 +33,29 @@ export async function listActiveWellbeingQuestions() {
   }
 
   return data || [];
+}
+
+export async function getProfileNameMap(userIds) {
+  const ids = Array.isArray(userIds) ? userIds : [];
+  const unique = Array.from(new Set(ids.map((x) => String(x || '').trim()).filter(Boolean))).slice(0, 250);
+  if (!unique.length) return {};
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .in('id', unique);
+
+  if (error) {
+    // Regular end-users often can't read other profiles due to RLS.
+    // In that case we just hide names (UI will show "—").
+    return {};
+  }
+
+  const map = {};
+  (data || []).forEach((row) => {
+    map[row.id] = row.full_name || row.email || row.id;
+  });
+  return map;
 }
 
 function shuffle(list) {

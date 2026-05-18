@@ -75,6 +75,11 @@ alter table public.clinical_tool_responses enable row level security;
 alter table public.clinical_tools enable row level security;
 alter table public.wellbeing_questions enable row level security;
 
+-- 2a) Audit columns for check-in questions
+alter table public.wellbeing_questions
+  add column if not exists created_by uuid references auth.users(id) on delete set null,
+  add column if not exists verified_by uuid references auth.users(id) on delete set null;
+
 -- 3a) Create approval_queue table
 create table if not exists public.approval_queue (
   id uuid primary key default gen_random_uuid(),

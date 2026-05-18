@@ -53,6 +53,12 @@ export default function AdminRecordList({
     return '';
   };
 
+  const resolveProfileName = (userId) => {
+    if (!userId) return '—';
+    const found = Array.isArray(filteredUsers) ? filteredUsers.find((u) => String(u?.id) === String(userId)) : null;
+    return found?.full_name || found?.email || '—';
+  };
+
   return (
     <div className={`list ${tab === 'contents' ? 'contents-list' : ''} ${tab === 'questions' ? 'questions-list' : ''} ${tab === 'clinical-tools' ? 'clinical-tools-list' : ''}`}>
       {tab === 'contents' && filteredContents.map((item) => {
@@ -107,6 +113,9 @@ export default function AdminRecordList({
         <div key={item.id} className={`list-item ${item.id === selectedQuestionId ? 'active' : ''}`}>
           <button className="list-item-main" type="button" onClick={() => setSelectedQuestionId(item.id)}>
             <strong>{item.prompt}</strong>
+            <small>
+              Author: {resolveProfileName(item.created_by)} • Verified by: {resolveProfileName(item.verified_by)}
+            </small>
             <div className="list-item-meta">
               <span>{item.answer_type === 'custom' && Array.isArray(item.options) ? `${item.options.length} options` : 'Likert 1-5'}</span>
               <span>{item.category || 'General'}</span>

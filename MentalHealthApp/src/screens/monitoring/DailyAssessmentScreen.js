@@ -9,6 +9,7 @@ import {
   listActiveWellbeingQuestions,
   buildRandomQuestionSet,
   saveDailyAssessmentEntry,
+  getProfileNameMap,
   getDailyAssessmentPreferences,
   saveDailyAssessmentPreferences,
 } from '../../lib/dailyAssessments';
@@ -151,6 +152,7 @@ function StarRating({ value, onChange, disabled }) {
 export default function DailyAssessmentScreen({ navigation }) {
   const [allQuestions, setAllQuestions] = useState([]);
   const [questionSet, setQuestionSet] = useState([]);
+  const [profileNameById, setProfileNameById] = useState({});
   const [answersByQuestionId, setAnswersByQuestionId] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -182,6 +184,18 @@ export default function DailyAssessmentScreen({ navigation }) {
       setLoading(true);
       setError('');
       const rows = await listActiveWellbeingQuestions();
+
+      const profileIds = (rows || [])
+        .flatMap((q) => [q?.created_by, q?.verified_by])
+        .filter(Boolean);
+
+      try {
+        const nameMap = await getProfileNameMap(profileIds);
+        setProfileNameById(nameMap);
+      } catch {
+        setProfileNameById({});
+      }
+
       setAllQuestions(rows);
       const desired = clampInt(overrideCount ?? preferredCount, 3, Math.min(12, rows.length || 12));
       const desiredCategories = Array.isArray(overrideCategories)
@@ -422,10 +436,16 @@ export default function DailyAssessmentScreen({ navigation }) {
                   const selectedValue = Number(selected?.value) || 0;
                   const isLast = idx === questions.length - 1;
 
+                  const authorName = profileNameById?.[q?.created_by] || '—';
+                  const verifiedName = profileNameById?.[q?.verified_by] || '—';
+
                   return (
                     <View key={q.id} style={[styles.row, !isLast && styles.rowDivider]}>
                       <View style={styles.rowLeft}>
-                        <Text style={styles.promptText}>{q.prompt}</Text>
+                        <View style={styles.promptTextWrap}>
+                          <Text style={styles.promptText}>{q.prompt}</Text>
+                          <Text style={styles.promptMetaText}>Author: {authorName} • Verified by: {verifiedName}</Text>
+                        </View>
                       </View>
 
                       <StarRating
@@ -592,12 +612,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
+  promptTextWrap: {
+    flex: 1,
+    flexDirection: 'column',
+  },
   promptText: {
     fontSize: 14,
     color: '#0f172a',
     fontWeight: '600',
     flex: 1,
     lineHeight: 20,
+  },
+  promptMetaText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#64748b',
   },
   starsRow: {
     flexDirection: 'row',
