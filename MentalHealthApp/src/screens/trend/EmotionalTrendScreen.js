@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   listDailyAssessmentCalendar,
   listDailyAssessmentDetailsByDate,
@@ -10,11 +11,15 @@ import {
 } from '../../lib/dailyAssessments';
 import TrendCalendarCard, { buildMonthCells } from './components/TrendCalendarCard';
 import TrendGraphCard from './components/TrendGraphCard';
-// import TrendInsightCard from './components/TrendInsightCard'; // Temporary hidden as requested
 import CalanderDetailsPopUp from './components/CalanderDetailsPopUp';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const INSIGHT_MODEL = 'gemini-3-flash-preview';
+
+const INSIGHT_CACHE_PREFIX = 'trend_ai_insight_v1:';
+const INSIGHT_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const INSIGHT_MIN_REFRESH_MS = 20 * 60 * 1000; // 20 minutes cooldown
+const INSIGHT_META_KEY = 'trend_ai_insight_meta_v1';
 
 const INSIGHT_PROMPT = `You are a mental wellbeing insights assistant.
 Given recent daily check-in data, provide:
@@ -78,16 +83,35 @@ export default function EmotionalTrendScreen() {
   const [aiInsight, setAiInsight] = useState('');
   const [insightLoading, setInsightLoading] = useState(false);
 
-  const buildInsightInput = (trendRows, entries) => {
-    const trendSummary = trendRows.map((x) => `${x.date}: mood=${x.mood ?? '-'}, checkin_avg=${x.wellbeing ?? '-'}`).join('\n');
+  const hashString = (input) => {
+    let hash = 5381;
+    for (let i = 0; i < input.length; i += 1) {
+      hash = ((hash << 5) + hash) ^ input.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+  };
 
-    const answerSummary = (entries || []).map((entry) => {
+  const buildInsightSignature = (trendRows, entries) => {
+    const trendSig = (trendRows || []).map((x) => [String(x?.date || ''), Number(x?.wellbeing || 0).toFixed(2)]);
+    const entriesSig = (entries || []).map((x) => [String(x?.id || ''), String(x?.created_at || ''), Number(x?.mood_score || 0)]);
+    return hashString(JSON.stringify({ trendSig, entriesSig }));
+  };
+
+  const buildInsightInput = (trendRows, entries) => {
+    const nextTrendRows = (trendRows || []).slice(-7);
+    const nextEntries = (entries || []).slice(0, 5);
+
+    const trendSummary = nextTrendRows
+      .map((x) => `${x.date}: checkin_avg=${x.wellbeing ?? '-'}`)
+      .join('\n');
+
+    const answerSummary = nextEntries.map((entry) => {
       const pairs = (entry.responses || [])
-        .slice(0, 8)
-        .map((r) => `${r.category || 'General'}|${r.prompt}: ${r.label || r.value || '-'}`)
+        .slice(0, 5)
+        .map((r) => `${r.prompt}: ${r.label || r.value || '-'}`)
         .join('; ');
 
-      return `${entry.created_at}: mood=${entry.mood_score ?? '-'}, avg=${entry.average_score ?? '-'}, answers=[${pairs}]`;
+      return `${entry.created_at}: mood=${entry.mood_score ?? '-'}, answers=[${pairs}]`;
     }).join('\n');
 
     return `Recent emotional trend:\n${trendSummary || 'No trend data'}\n\nRecent detailed check-ins:\n${answerSummary || 'No detailed entries'}`;
@@ -113,7 +137,7 @@ export default function EmotionalTrendScreen() {
       generationConfig: {
         temperature: 0.5,
         topP: 0.9,
-        maxOutputTokens: 280,
+        maxOutputTokens: 160,
       },
     };
 
@@ -149,15 +173,75 @@ export default function EmotionalTrendScreen() {
         return;
       }
 
+      const signature = buildInsightSignature(trendRows, recentEntries);
+      const cacheKey = `${INSIGHT_CACHE_PREFIX}${signature}`;
+
+      // Global cooldown to prevent repeated Gemini calls on focus.
+      try {
+        const metaRaw = await AsyncStorage.getItem(INSIGHT_META_KEY);
+        if (metaRaw) {
+          const meta = JSON.parse(metaRaw);
+          const lastAttemptAt = Number(meta?.lastAttemptAt || 0);
+          if (lastAttemptAt > 0 && (Date.now() - lastAttemptAt) < INSIGHT_MIN_REFRESH_MS) {
+            return;
+          }
+        }
+      } catch {
+        // Ignore meta cache errors.
+      }
+
+      try {
+        const cachedRaw = await AsyncStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          const cachedAt = Number(cached?.at || 0);
+          const cachedText = String(cached?.text || '');
+          const ttlMs = Number(cached?.ttlMs || INSIGHT_CACHE_TTL_MS);
+          const isFresh = cachedAt > 0 && (Date.now() - cachedAt) < ttlMs;
+
+          if (isFresh && cachedText) {
+            setAiInsight(cachedText);
+            return;
+          }
+        }
+      } catch {
+        // Ignore cache errors and continue.
+      }
+
       setInsightLoading(true);
       try {
+        try {
+          await AsyncStorage.setItem(INSIGHT_META_KEY, JSON.stringify({ lastAttemptAt: Date.now() }));
+        } catch {
+          // Ignore meta write failures.
+        }
+
         const insight = await fetchAIInsight(trendRows, recentEntries);
         setAiInsight(insight);
+        try {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), text: insight }));
+        } catch {
+          // Ignore cache write failures.
+        }
       } catch (insightError) {
-        setAiInsight(
-          insightError?.message ||
-          'You are building a strong self-awareness habit. Keep going — your next few check-ins will unlock even richer, more personalized suggestions.'
-        );
+        const message = String(insightError?.message || '');
+        const isHighDemand = /high\s+demand|rate\s*limit|too\s+many\s+requests|429/i.test(message);
+        const fallbackText = isHighDemand
+          ? 'AI is busy right now (high demand). Please try again later — your progress is still being tracked.'
+          : (message || 'You are building a strong self-awareness habit. Keep going — your next few check-ins will unlock even richer, more personalized suggestions.');
+
+        setAiInsight(fallbackText);
+
+        // Cache error/fallback briefly to avoid repeated calls while Gemini is overloaded.
+        try {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify({
+            at: Date.now(),
+            text: fallbackText,
+            ttlMs: isHighDemand ? INSIGHT_MIN_REFRESH_MS : 60 * 60 * 1000,
+          }));
+        } catch {
+          // Ignore cache write failures.
+        }
       } finally {
         setInsightLoading(false);
       }
@@ -259,9 +343,14 @@ export default function EmotionalTrendScreen() {
           <Text style={styles.emptyText}>No daily assessment data yet. Submit a check-in first.</Text>
         )}
 
-        <TrendGraphCard labels={labels} overallSeries={overallSeries} loading={loading} />
-
-        {/* <TrendInsightCard insightLoading={insightLoading} aiInsight={aiInsight} hasData={overallSeries.length > 0} /> */}
+        <TrendGraphCard
+          labels={labels}
+          overallSeries={overallSeries}
+          loading={loading}
+          insightLoading={insightLoading}
+          aiInsight={aiInsight}
+          hasData={overallSeries.length > 0}
+        />
       </ScrollView>
 
       <CalanderDetailsPopUp
@@ -279,6 +368,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   content: {
     padding: 16,

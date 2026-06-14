@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Import Screens
 import LandingScreen from './src/screens/user-management/LandingScreen';
@@ -168,43 +169,45 @@ export default function App() {
   if (isAuthLoading) return null;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <NavigationContainer linking={linking}>
-        <Stack.Navigator
-          key={session ? 'signed-in' : 'signed-out'}
-          initialRouteName={isPasswordRecovery ? 'ChangePassword' : (session ? 'Main' : 'Landing')}
-        >
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Set New Password' }} />
-          <Stack.Screen name="Landing" component={LandingScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Registration" component={RegistrationScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
-          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-          
-          {/* Nested Screens for Monitoring */}
-          <Stack.Screen name="DailyAssessment" component={DailyAssessmentScreen} options={{ title: 'Daily Assessment' }} />
-          <Stack.Screen name="ClinicalTools" component={ClinicalToolsScreen} options={{ title: 'Clinical Tools' }} />
-          <Stack.Screen name="ClinicalToolQuestionnaire" component={ClinicalToolQuestionnaireScreen} options={{ title: 'Assessment' }} />
-          <Stack.Screen name="ClinicalToolHistory" component={ClinicalToolHistoryScreen} options={{ title: 'Historical Report' }} />
-          <Stack.Screen name="AIChat" component={AIChatScreen} options={{ title: 'AI Chat' }} />
-          
-          {/* Profile Screens */}
-          <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} />
-
-          {/* Crisis Screens */}
-          <Stack.Screen name="EmergencyContacts" component={EmergencyContactsScreen} options={{ title: 'Emergency Contact' }} />
-
-          {/* Resources Screens */}
-          <Stack.Screen name="EducationalContent" component={EducationalContentScreen} options={{ title: 'Educational Content' }} />
-          <Stack.Screen name="EducationalContentDetail" component={EducationalContentDetailScreen} options={{ title: 'Content' }} />
-          <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events & Activities' }} />
-          <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </KeyboardAvoidingView>
+    <SafeAreaProvider>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <NavigationContainer linking={linking}>
+          <Stack.Navigator
+            key={session ? 'signed-in' : 'signed-out'}
+            initialRouteName={isPasswordRecovery ? 'ChangePassword' : (session ? 'Main' : 'Landing')}
+          >
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Set New Password' }} />
+            <Stack.Screen name="Landing" component={LandingScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Registration" component={RegistrationScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
+            <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+            
+            {/* Nested Screens for Monitoring */}
+            <Stack.Screen name="DailyAssessment" component={DailyAssessmentScreen} options={{ title: 'Daily Assessment' }} />
+            <Stack.Screen name="ClinicalTools" component={ClinicalToolsScreen} options={{ title: 'Clinical Tools' }} />
+            <Stack.Screen name="ClinicalToolQuestionnaire" component={ClinicalToolQuestionnaireScreen} options={{ title: 'Assessment' }} />
+            <Stack.Screen name="ClinicalToolHistory" component={ClinicalToolHistoryScreen} options={{ title: 'Historical Report' }} />
+            <Stack.Screen name="AIChat" component={AIChatScreen} options={{ title: 'AI Chat' }} />
+            
+            {/* Profile Screens */}
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} />
+  
+            {/* Crisis Screens */}
+            <Stack.Screen name="EmergencyContacts" component={EmergencyContactsScreen} options={{ title: 'Emergency Contact' }} />
+  
+            {/* Resources Screens */}
+            <Stack.Screen name="EducationalContent" component={EducationalContentScreen} options={{ title: 'Educational Content' }} />
+            <Stack.Screen name="EducationalContentDetail" component={EducationalContentDetailScreen} options={{ title: 'Content' }} />
+            <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events & Activities' }} />
+            <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </KeyboardAvoidingView>
+    </SafeAreaProvider>
   );
 }

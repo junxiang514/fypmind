@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 function moodEmoji(score) {
   const n = Math.round(Number(score));
@@ -22,7 +24,14 @@ function moodLevelLabel(score) {
   return 'Excited';
 }
 
-export default function TrendGraphCard({ labels, overallSeries, loading = false }) {
+export default function TrendGraphCard({
+  labels,
+  overallSeries,
+  loading = false,
+  insightLoading = false,
+  aiInsight = '',
+  hasData = false,
+}) {
   const screenWidth = Dimensions.get('window').width;
   const normalizedSeries = useMemo(
     () => (overallSeries || []).map((v) => {
@@ -84,15 +93,6 @@ export default function TrendGraphCard({ labels, overallSeries, loading = false 
     },
   };
 
-  const averageScore = normalizedSeries.length
-    ? (normalizedSeries.reduce((sum, v) => sum + v, 0) / normalizedSeries.length).toFixed(2)
-    : '-';
-  const averageScoreDisplay = averageScore === '-' ? '-' : `${averageScore} / 5.00`;
-
-  const improvement = normalizedSeries.length >= 2
-    ? `${(((normalizedSeries[normalizedSeries.length - 1] - normalizedSeries[0]) / Math.max(1, normalizedSeries[0])) * 100).toFixed(0)}%`
-    : '-';
-
   return (
     <>
       <View style={styles.chartContainer}>
@@ -123,16 +123,45 @@ export default function TrendGraphCard({ labels, overallSeries, loading = false 
             style={styles.chart}
           />
         )}
-      </View>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{averageScoreDisplay}</Text>
-          <Text style={styles.statLabel}>Average Score</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{improvement}</Text>
-          <Text style={styles.statLabel}>Improvement</Text>
+        <View style={styles.divider} />
+
+        <View style={styles.insightRow}>
+          <LinearGradient
+            colors={['#e0f2fe', '#dbeafe']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarWrap}
+          >
+            <View style={styles.avatarIconInner}>
+              <Ionicons name="sparkles" size={18} color="#0284c7" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.thoughtDots}>
+            <View style={[styles.thoughtDot, styles.thoughtDotSmall]} />
+            <View style={[styles.thoughtDot, styles.thoughtDotMedium]} />
+          </View>
+
+          <View style={styles.thoughtBubble}>
+            <View style={styles.bubbleHeader}>
+              <Ionicons name="chatbubble-ellipses" size={14} color="#0284c7" />
+              <Text style={styles.bubbleTitle}>AI Insight</Text>
+            </View>
+
+            {insightLoading ? (
+              <View style={styles.bubbleLoadingRow}>
+                <ActivityIndicator size="small" color="#0284c7" />
+                <Text style={styles.bubbleLoadingText}>Thinking...</Text>
+              </View>
+            ) : (
+              <Text style={styles.bubbleText}>
+                {aiInsight || (hasData
+                  ? 'You are doing great by tracking your wellbeing consistently. Keep this momentum — your insights will become even more powerful and personalized over time.'
+                  : 'You are one check-in away from your first personalized insight — let\'s begin and build your momentum.')}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
     </>
@@ -182,37 +211,98 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 12,
+  divider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginTop: 12,
+    marginBottom: 12,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+  insightRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  avatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
     alignItems: 'center',
-    marginHorizontal: 0,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    justifyContent: 'center',
+  },
+  avatarIconInner: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thoughtDots: {
+    width: 18,
+    alignItems: 'center',
+    paddingTop: 18,
+  },
+  thoughtDot: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    marginVertical: 2,
+  },
+  thoughtDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  thoughtDotMedium: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+  },
+  thoughtBubble: {
+    flex: 1,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  bubbleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 6,
+  },
+  bubbleTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  bubbleText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  bubbleLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
   },
-  statValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0284c7',
-  },
-  statLabel: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 6,
-    fontWeight: '600',
+  bubbleLoadingText: {
+    color: '#0369a1',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
