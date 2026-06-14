@@ -31,6 +31,7 @@ export default function MonitoringScreen({ navigation }) {
   const avatarUri = useMemo(() => {
     const uri = profile?.avatar_url;
     if (!uri) return null;
+    if (uri.startsWith('data:')) return uri;
     const stamp = profile?.updated_at ? encodeURIComponent(profile.updated_at) : Date.now();
     const separator = uri.includes('?') ? '&' : '?';
     return `${uri}${separator}t=${stamp}`;

@@ -65,16 +65,24 @@ export default function ProfileScreen({ navigation }) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 1,
+      quality: 0.4,
+      base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
-      setAvatarUri(uri);
+      const base64Str = result.assets[0].base64;
+      const fileExt = result.assets[0].uri.split('.').pop() || 'jpg';
+      const base64DataUrl = `data:image/${fileExt === 'png' ? 'png' : 'jpeg'};base64,${base64Str}`;
+      
+      setAvatarUri(base64DataUrl);
       try {
-        const updated = await updateMyProfile({ avatar_url: uri });
+        setLoading(true);
+        const updated = await updateMyProfile({ avatar_url: base64DataUrl });
         setUserProfile(updated);
+        Alert.alert('Success', 'Profile picture updated successfully!');
       } catch (e) {
         Alert.alert('Error', e?.message ?? 'Failed to save photo');
+      } finally {
+        setLoading(false);
       }
     }
   };
