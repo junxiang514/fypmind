@@ -444,7 +444,8 @@ export default function DailyAssessmentScreen({ navigation }) {
                       <View style={styles.rowLeft}>
                         <View style={styles.promptTextWrap}>
                           <Text style={styles.promptText}>{q.prompt}</Text>
-                          <Text style={styles.promptMetaText}>Author: {authorName} • Verified by: {verifiedName}</Text>
+                          <Text style={styles.promptMetaText}>Author: {authorName}</Text>
+                          <Text style={styles.promptMetaText}>Verified by: {verifiedName}</Text>
                         </View>
                       </View>
 

@@ -84,9 +84,9 @@ export default function AdminRecordList({
                 <span>{Array.isArray(item.activity_payload) ? `${item.activity_payload.length} activities` : '0 activities'}</span>
               </div>
             </button>
-                  {APPLICATION_MANAGER_ROLES.has(signedInRole) && (
-                    <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedContentId(item.id); onEditContent && onEditContent(item.id); }}>Edit</button>
-                  )}
+            {APPLICATION_MANAGER_ROLES.has(signedInRole) && (
+              <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedContentId(item.id); onEditContent && onEditContent(item.id); }}>Edit</button>
+            )}
           </div>
         );
       })}
@@ -121,9 +121,9 @@ export default function AdminRecordList({
               <span>{item.category || 'General'}</span>
             </div>
           </button>
-            {MENTAL_HEALTH_ROLES.has(signedInRole) && (
-              <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedQuestionId(item.id); onEditQuestion && onEditQuestion(item.id); }}>Edit</button>
-            )}
+          {MENTAL_HEALTH_ROLES.has(signedInRole) && (
+            <button type="button" className="btn light tiny-btn" onClick={() => { setSelectedQuestionId(item.id); onEditQuestion && onEditQuestion(item.id); }}>Edit</button>
+          )}
         </div>
       ))}
 
