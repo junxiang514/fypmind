@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#334155',
     lineHeight: 23,
+    textAlign: 'justify',
   },
   loadingRow: {
     flexDirection: 'row',

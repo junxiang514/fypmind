@@ -14,27 +14,31 @@ import TrendGraphCard from './components/TrendGraphCard';
 import CalanderDetailsPopUp from './components/CalanderDetailsPopUp';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const INSIGHT_MODEL = 'gemini-3-flash-preview';
+const INSIGHT_MODEL = 'gemini-3.1-flash-lite';
 
-const INSIGHT_CACHE_PREFIX = 'trend_ai_insight_v1:';
+const INSIGHT_CACHE_PREFIX = 'trend_ai_insight_v2:';
 const INSIGHT_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const INSIGHT_MIN_REFRESH_MS = 20 * 60 * 1000; // 20 minutes cooldown
 const INSIGHT_META_KEY = 'trend_ai_insight_meta_v1';
 
-const INSIGHT_PROMPT = `You are a mental wellbeing insights assistant.
-Given recent daily check-in data, provide:
-1) A short trend observation (1 sentence)
-2) 2-3 practical, supportive suggestions
-3) 1 encouragement line
+const INSIGHT_PROMPT = `You are a supportive and highly analytical mental wellbeing assistant.
+Your goal is to provide intelligent, hyper-personalized, and actionable insights based on the user's emotional trends and detailed daily check-in responses.
+
+Analyze the data carefully:
+- Look for correlations (e.g., how sleep quality or stress levels relate to mood scores).
+- Observe progress or patterns (e.g., steady improvements, volatility, or consecutive positive days).
+- Pay close attention to specific categories mentioned in check-ins (e.g., Sleep, Stress, Mindfulness, Social, Productivity).
+
+Please write a response that includes:
+1) A specific, personalized trend observation connecting the mood or scores to concrete categories from the check-ins (e.g., "Your mood has been steady, showing a strong link with improved sleep" or "We noticed a slight drop in focus on high-stress days").
+2) practical, highly relevant self-care recommendations directly addressing the patterns shown in the data (e.g., specific mindfulness, relaxation, or sleep hygiene tips).
+3) A warm, motivational encouragement sentence.
 
 Rules:
-- Keep it non-diagnostic.
-- Do not claim medical diagnosis.
-- Keep response concise, plain text, around 10-20 words.
-- Use a warm, hopeful, strengths-based tone.
-- Highlight progress first before mentioning improvement areas.
-- Sound positive and motivating, with compassionate energy.
-- Avoid scary, harsh, or overly clinical wording.`;
+- Keep the response clean, cohesive, and in plain text (under 15-20 words total).
+- Do not make clinical claims or medical diagnoses. Keep it non-diagnostic.
+- Use a warm, empathetic, and strengths-based tone.
+- Ensure the insight is specifically tailored to the check-in answers provided and does not sound generic.`;
 
 function parseLocalDateKey(dateKey) {
   const [year, month, day] = String(dateKey || '').split('-').map((v) => Number(v));
@@ -94,7 +98,7 @@ export default function EmotionalTrendScreen() {
   const buildInsightSignature = (trendRows, entries) => {
     const trendSig = (trendRows || []).map((x) => [String(x?.date || ''), Number(x?.wellbeing || 0).toFixed(2)]);
     const entriesSig = (entries || []).map((x) => [String(x?.id || ''), String(x?.created_at || ''), Number(x?.mood_score || 0)]);
-    return hashString(JSON.stringify({ trendSig, entriesSig }));
+    return hashString(JSON.stringify({ trendSig, entriesSig, prompt: INSIGHT_PROMPT }));
   };
 
   const buildInsightInput = (trendRows, entries) => {
@@ -137,7 +141,7 @@ export default function EmotionalTrendScreen() {
       generationConfig: {
         temperature: 0.5,
         topP: 0.9,
-        maxOutputTokens: 160,
+        maxOutputTokens: 1000,
       },
     };
 
@@ -154,6 +158,7 @@ export default function EmotionalTrendScreen() {
 
     const parts = payload?.candidates?.[0]?.content?.parts || [];
     const text = parts.map((p) => p?.text || '').join('').trim();
+    console.log('[DEBUG] Gemini Raw Text:', text);
     return text || 'Keep tracking your check-ins. More entries will enable better personalized insights.';
   };
 
@@ -172,57 +177,10 @@ export default function EmotionalTrendScreen() {
         setAiInsight('You are at the beginning of something meaningful — start your daily check-ins and I will turn your progress into uplifting, personalized insights.');
         return;
       }
-
-      const signature = buildInsightSignature(trendRows, recentEntries);
-      const cacheKey = `${INSIGHT_CACHE_PREFIX}${signature}`;
-
-      // Global cooldown to prevent repeated Gemini calls on focus.
-      try {
-        const metaRaw = await AsyncStorage.getItem(INSIGHT_META_KEY);
-        if (metaRaw) {
-          const meta = JSON.parse(metaRaw);
-          const lastAttemptAt = Number(meta?.lastAttemptAt || 0);
-          if (lastAttemptAt > 0 && (Date.now() - lastAttemptAt) < INSIGHT_MIN_REFRESH_MS) {
-            return;
-          }
-        }
-      } catch {
-        // Ignore meta cache errors.
-      }
-
-      try {
-        const cachedRaw = await AsyncStorage.getItem(cacheKey);
-        if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw);
-          const cachedAt = Number(cached?.at || 0);
-          const cachedText = String(cached?.text || '');
-          const ttlMs = Number(cached?.ttlMs || INSIGHT_CACHE_TTL_MS);
-          const isFresh = cachedAt > 0 && (Date.now() - cachedAt) < ttlMs;
-
-          if (isFresh && cachedText) {
-            setAiInsight(cachedText);
-            return;
-          }
-        }
-      } catch {
-        // Ignore cache errors and continue.
-      }
-
       setInsightLoading(true);
       try {
-        try {
-          await AsyncStorage.setItem(INSIGHT_META_KEY, JSON.stringify({ lastAttemptAt: Date.now() }));
-        } catch {
-          // Ignore meta write failures.
-        }
-
         const insight = await fetchAIInsight(trendRows, recentEntries);
         setAiInsight(insight);
-        try {
-          await AsyncStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), text: insight }));
-        } catch {
-          // Ignore cache write failures.
-        }
       } catch (insightError) {
         const message = String(insightError?.message || '');
         const isHighDemand = /high\s+demand|rate\s*limit|too\s+many\s+requests|429/i.test(message);
@@ -231,17 +189,6 @@ export default function EmotionalTrendScreen() {
           : (message || 'You are building a strong self-awareness habit. Keep going — your next few check-ins will unlock even richer, more personalized suggestions.');
 
         setAiInsight(fallbackText);
-
-        // Cache error/fallback briefly to avoid repeated calls while Gemini is overloaded.
-        try {
-          await AsyncStorage.setItem(cacheKey, JSON.stringify({
-            at: Date.now(),
-            text: fallbackText,
-            ttlMs: isHighDemand ? INSIGHT_MIN_REFRESH_MS : 60 * 60 * 1000,
-          }));
-        } catch {
-          // Ignore cache write failures.
-        }
       } finally {
         setInsightLoading(false);
       }

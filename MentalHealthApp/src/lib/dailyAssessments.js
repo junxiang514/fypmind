@@ -233,20 +233,29 @@ export async function saveDailyAssessmentEntry({ moodScore, notes, questionSet, 
   return data;
 }
 
-export async function listDailyAssessmentTrend(days = 14) {
+export async function listDailyAssessmentTrend(days = 14, targetMonth = null) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('User not authenticated');
 
-  const start = new Date();
-  start.setDate(start.getDate() - Math.max(1, days - 1));
-  start.setHours(0, 0, 0, 0);
-
-  const { data, error } = await supabase
+  let query = supabase
     .from('daily_assessment_entries')
     .select('created_at, mood_score, average_score')
-    .eq('user_id', userId)
-    .gte('created_at', start.toISOString())
-    .order('created_at', { ascending: true });
+    .eq('user_id', userId);
+
+  if (targetMonth instanceof Date) {
+    const start = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+    query = query
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
+  } else {
+    const start = new Date();
+    start.setDate(start.getDate() - Math.max(1, days - 1));
+    start.setHours(0, 0, 0, 0);
+    query = query.gte('created_at', start.toISOString());
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: true });
 
   if (error) {
     if (shouldFallback(error)) return [];

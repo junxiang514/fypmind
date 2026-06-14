@@ -290,6 +290,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#334155',
     fontWeight: '600',
+    textAlign: 'justify',
   },
   bubbleLoadingRow: {
     flexDirection: 'row',
