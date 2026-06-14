@@ -61,6 +61,13 @@ export default function ClinicalToolsInfoModal({ visible, onClose, onDontRemindA
                 Answer each question honestly based on your experience. Your results will be saved for reference. Review trends over time and share results with your healthcare provider if needed.
               </Text>
             </View>
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>🔒 Data Privacy & PDPA Compliance</Text>
+              <Text style={styles.infoSectionText}>
+                Your self-assessment data is processed in strict accordance with the Personal Data Protection Act (PDPA). Your responses are securely encrypted, kept private, and will only be used to build your clinical history and emotional trend charts. You retain full rights to access, correct, or request deletion of your screening history by contacting our Data Protection Officer.
+              </Text>
+            </View>
           </ScrollView>
 
           <View style={styles.infoModalFooter}>

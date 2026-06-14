@@ -1,15 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 
 export default function TrendInsightCard({ insightLoading, aiInsight, hasData }) {
   return (
     <View style={styles.insightContainer}>
       <View style={styles.insightHeader}>
-        <View style={styles.iconBadge}>
-          <Ionicons name="sparkles" size={16} color="#0284c7" />
+        <Image
+          source={require('../../../../assets/LumiAvatar.png')}
+          style={styles.avatarImage}
+        />
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.botName}>Lumi</Text>
+          <Text style={styles.insightTitle}>Personalized Insight</Text>
         </View>
-        <Text style={styles.insightTitle}>AI Insight</Text>
       </View>
       {insightLoading ? (
         <View style={styles.loadingRow}>
@@ -23,6 +26,9 @@ export default function TrendInsightCard({ insightLoading, aiInsight, hasData })
             : 'You are one check-in away from your first personalized insight — let’s begin and build your momentum.')}
         </Text>
       )}
+      <Text style={styles.disclaimerText}>
+        This is an AI-generated message. Please seek professional help if needed.
+      </Text>
     </View>
   );
 }
@@ -45,21 +51,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  iconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  headerTextContainer: {
     justifyContent: 'center',
-    backgroundColor: '#e0f2fe',
-    borderWidth: 1,
-    borderColor: '#bae6fd',
+  },
+  botName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   insightTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0f172a',
-    marginLeft: 8,
   },
   insightText: {
     fontSize: 15,
@@ -81,5 +93,12 @@ const styles = StyleSheet.create({
     color: '#0369a1',
     fontSize: 12,
     fontWeight: '600',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 10,
+    fontStyle: 'italic',
+    textAlign: 'left',
   },
 });

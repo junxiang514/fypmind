@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MentalHealthApp",
+    "name": "MIND",
     "slug": "MentalHealthApp",
     "scheme": "mentalhealthapp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/Mind App Logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/Mind App Logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

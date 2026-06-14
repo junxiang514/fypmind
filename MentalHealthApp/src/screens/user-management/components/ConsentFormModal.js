@@ -81,25 +81,47 @@ export default function ConsentFormModal({
               {'\n'}• You should consult a qualified healthcare professional for any health concerns.
             </Text>
 
-            <Text style={styles.sectionHeading}>3. Data Privacy & Security</Text>
+            <Text style={styles.sectionHeading}>3. Personal Data Collection & Notice (PDPA Compliance)</Text>
             <Text style={styles.sectionText}>
-              We take your privacy seriously. Your personal information and assessment data are encrypted and stored securely. We do not share your data with third parties without your consent, except as required by law.
+              In accordance with the Personal Data Protection Act (PDPA), we notify you that MIND collects and processes your personal data. This personal data includes:
+              {'\n'}• Identity Information: Full name, email address, phone number, date of birth, gender, and profile photo.
+              {'\n'}• Daily Check-in & Self-Assessment Data: Mood scores, journal notes, wellness indicators, daily assessment responses, and clinical self-assessment questionnaires (e.g. PHQ-9, GAD-7, and clinical test scales).
+              {'\n'}• Clinical & Emotional Data: Historical test reports, user progress metrics, and records of interaction with the AI assistant (Lumi).
+              {'\n'}• Technical & Location Data: App usage logs, device specifications, and device location coordinates (when authorized).
             </Text>
 
-            <Text style={styles.sectionHeading}>4. Location Services & Behavioral Tracking</Text>
+            <Text style={styles.sectionHeading}>4. Purposes of Data Processing & Disclosure</Text>
             <Text style={styles.sectionText}>
-              To provide you with location-based healthcare provider recommendations and relevant local mental health resources, the application may request access to your device location. Your location data is used only within the application and is not shared with third parties without explicit consent.
-            </Text>
-
-            <Text style={styles.sectionHeading}>5. User Behavior Analysis & Data Usage</Text>
-            <Text style={styles.sectionText}>
-              MIND tracks and analyzes your usage patterns, assessment responses, and emotional trends to:
-              {'\n'}• Provide personalized mental health recommendations.
-              {'\n'}• Identify potential health risks and intervention opportunities.
-              {'\n'}• Improve the application's features and user experience.
-              {'\n'}• Generate anonymized statistical insights for research purposes.
+              Your personal data is collected and processed solely for the following purposes:
+              {'\n'}• To process daily assessment scores and check-in responses to calculate your wellbeing indexes.
+              {'\n'}• To build detailed mental health logs, emotional trend charts, and progress summaries.
+              {'\n'}• To deliver personalized mental health insights, summaries, and self-care recommendations.
+              {'\n'}• To facilitate matching and recommendations for nearby healthcare providers based on location.
+              {'\n'}• To provide supportive counseling and answers via the AI chatbot (Lumi).
+              {'\n'}• To maintain and improve application performance and security.
               {'\n'}
-              Your individual data will not be sold. Aggregated, anonymized data may be used for academic research and app improvement, subject to ethical review standards.
+              We do not sell your personal data. We do not disclose your personal data to third parties without your explicit consent, except under legal obligations, court orders, or when critical to protect your safety or life in an emergency crisis.
+              {'\n\n'}
+              <Text style={{ fontWeight: '800', color: '#0f172a' }}>Daily Assessment & Check-In Instructions:</Text>
+              {'\n'}To ensure accuracy of the processed emotional trend data, please follow these instructions when checking in:
+              {'\n'}• Rate each prompt from 1 to 5 stars based on your daily experience (1: Very low/difficult, 5: Excellent/best).
+              {'\n'}• Complete all questions in your active daily check-in set before tapping "Check in now!".
+              {'\n'}• Use the customize or refresh tools at the top of the assessment screen to adjust tracking categories (e.g. sleep, stress, energy) or get a new set of questions.
+            </Text>
+
+            <Text style={styles.sectionHeading}>5. Data Access, Correction & Consent Withdrawal</Text>
+            <Text style={styles.sectionText}>
+              Under the PDPA, you retain full rights over your personal data, including:
+              {'\n'}• Right of Access: You have the right to request a copy of the personal data we store about you.
+              {'\n'}• Right to Correction: You can request updates or corrections to any inaccurate or incomplete personal data via your profile or by contacting us.
+              {'\n'}• Right of Withdrawal: You may withdraw your consent to data processing at any time. Note that withdrawing consent may limit our ability to provide certain personalized features (such as AI Chat or Provider recommendations).
+              {'\n'}
+              To exercise these rights, make inquiries, or register data protection complaints, you can contact our designated Data Protection Officer (DPO).
+            </Text>
+
+            <Text style={styles.sectionHeading}>5a. Data Security & Retention</Text>
+            <Text style={styles.sectionText}>
+              We employ strict technical and organizational measures to safeguard your personal data against loss, misuse, or unauthorized access. Your data is encrypted in transit and at rest. We only retain your personal data for as long as your user account remains active, or as required by clinical safety policies and relevant legal data retention laws.
             </Text>
 
             <Text style={styles.sectionHeading}>6. User Responsibilities</Text>

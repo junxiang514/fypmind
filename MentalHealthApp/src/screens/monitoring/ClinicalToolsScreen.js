@@ -206,7 +206,7 @@ export default function ClinicalToolsScreen({ navigation }) {
                 </View>
               </View>
 
-              <Text style={styles.headerSubtitle}>Standardized assessments to help you understand your mental health.</Text>
+              <Text style={styles.headerSubtitle}>Standardized assessments to help you understand your mental health. All data is processed in compliance with the PDPA.</Text>
 
               <View style={styles.headerInfoRow}>
                 <View style={styles.headerInfoPill}>
@@ -216,6 +216,10 @@ export default function ClinicalToolsScreen({ navigation }) {
                 <View style={styles.headerInfoPill}>
                   <Ionicons name="sparkles-outline" size={14} color="#4338ca" />
                   <Text style={styles.headerInfoText}>Quick Results</Text>
+                </View>
+                <View style={styles.headerInfoPill}>
+                  <Ionicons name="lock-closed-outline" size={14} color="#0284c7" />
+                  <Text style={styles.headerInfoText}>PDPA Compliant</Text>
                 </View>
               </View>
 

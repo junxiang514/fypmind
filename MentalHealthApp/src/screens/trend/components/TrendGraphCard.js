@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, Image } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -127,16 +127,10 @@ export default function TrendGraphCard({
         <View style={styles.divider} />
 
         <View style={styles.insightRow}>
-          <LinearGradient
-            colors={['#e0f2fe', '#dbeafe']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatarWrap}
-          >
-            <View style={styles.avatarIconInner}>
-              <Ionicons name="sparkles" size={18} color="#0284c7" />
-            </View>
-          </LinearGradient>
+          <Image
+            source={require('../../../../assets/LumiAvatar.png')}
+            style={styles.avatarImage}
+          />
 
           <View style={styles.thoughtDots}>
             <View style={[styles.thoughtDot, styles.thoughtDotSmall]} />
@@ -145,8 +139,8 @@ export default function TrendGraphCard({
 
           <View style={styles.thoughtBubble}>
             <View style={styles.bubbleHeader}>
-              <Ionicons name="chatbubble-ellipses" size={14} color="#0284c7" />
-              <Text style={styles.bubbleTitle}>AI Insight</Text>
+              <Ionicons name="chatbubble-ellipses" size={14} color="#6366F1" />
+              <Text style={styles.bubbleTitle}>Lumi's Insight</Text>
             </View>
 
             {insightLoading ? (
@@ -161,6 +155,10 @@ export default function TrendGraphCard({
                   : 'You are one check-in away from your first personalized insight — let\'s begin and build your momentum.')}
               </Text>
             )}
+
+            <Text style={styles.bubbleDisclaimer}>
+              This is an AI-generated message. Please seek professional help if needed.
+            </Text>
           </View>
         </View>
       </View>
@@ -223,24 +221,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  avatarWrap: {
+  avatarImage: {
     width: 44,
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: '#bae6fd',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarIconInner: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
   thoughtDots: {
     width: 18,
@@ -304,5 +291,12 @@ const styles = StyleSheet.create({
     color: '#0369a1',
     fontSize: 12,
     fontWeight: '700',
+  },
+  bubbleDisclaimer: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 8,
+    fontStyle: 'italic',
+    textAlign: 'left',
   },
 });

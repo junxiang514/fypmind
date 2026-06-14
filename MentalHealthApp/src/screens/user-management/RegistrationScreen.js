@@ -232,6 +232,7 @@ export default function RegistrationScreen({ navigation }) {
           .insert({
             id: data.user.id,
             full_name: pendingRegistration.name,
+            email: pendingRegistration.email,
             gender: pendingRegistration.gender,
             updated_at: new Date(),
           });
