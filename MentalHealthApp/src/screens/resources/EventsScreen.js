@@ -1,19 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { listEvents, listMySavedEventIds } from '../../lib/events';
 
-function formatDateTime(value) {
+function formatDateOnly(value) {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString([], {
+  return d.toLocaleDateString([], {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
-    hour: '2-digit',
+  });
+}
+
+function formatTimeOnly(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], {
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   });
 }
 
@@ -67,47 +76,42 @@ export default function EventsScreen({ navigation }) {
   const renderItem = ({ item }) => {
     const title = item?.title || 'Untitled';
     const location = item?.location;
-    const startLabel = item?.start_at ? formatDateTime(item.start_at) : null;
-    const endLabel = item?.end_at ? formatDateTime(item.end_at) : null;
-    const startDate = item?.start_at ? new Date(item.start_at) : null;
-    const now = new Date();
-    const isPast = startDate && startDate.getTime() < now.getTime();
-    const diffDays = startDate ? Math.ceil((startDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+    const dateLabel = item?.start_at ? formatDateOnly(item.start_at) : null;
+    const timeLabel = item?.start_at ? formatTimeOnly(item.start_at) : null;
 
-    let statusText = '';
-    if (isPast) statusText = 'Past event';
-    else if (diffDays === 0) statusText = 'Starts today';
-    else if (Number.isFinite(diffDays) && diffDays > 0) statusText = `${diffDays} day${diffDays > 1 ? 's' : ''} left`;
+    const imageUrls = Array.isArray(item?.image_urls)
+      ? item.image_urls.filter((u) => typeof u === 'string' && u.trim())
+      : [];
+    const firstImage = imageUrls.length > 0 ? imageUrls[0] : null;
 
     return (
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('EventDetail', { id: item.id })}>
-        <View style={styles.dateColumn}>
-          <View style={styles.datePill}>
-            <Ionicons name="calendar" size={16} color="#0f172a" />
-          </View>
+        <View style={styles.imageColumn}>
+          {firstImage ? (
+            <Image source={{ uri: firstImage }} style={styles.eventImage} />
+          ) : (
+            <View style={styles.datePill}>
+              <Ionicons name="calendar" size={26} color="#0f172a" />
+            </View>
+          )}
         </View>
 
         <View style={styles.cardBody}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.title}>{title}</Text>
-            {!!statusText && (
-              <View style={[styles.statusBadge, isPast ? styles.statusBadgePast : styles.statusBadgeUpcoming]}>
-                <Text style={[styles.statusText, isPast ? styles.statusTextPast : styles.statusTextUpcoming]}>{statusText}</Text>
-              </View>
-            )}
           </View>
 
-          {!!startLabel && (
+          {!!dateLabel && (
             <View style={styles.metaRow}>
-              <Ionicons name="time" size={14} color="#64748b" />
-              <Text style={styles.metaLocation}>Start: {startLabel}</Text>
+              <Ionicons name="calendar" size={14} color="#64748b" />
+              <Text style={styles.metaLocation}>{dateLabel}</Text>
             </View>
           )}
 
-          {!!endLabel && (
+          {!!timeLabel && (
             <View style={styles.metaRow}>
-              <Ionicons name="hourglass-outline" size={14} color="#64748b" />
-              <Text style={styles.metaLocation}>End: {endLabel}</Text>
+              <Ionicons name="time" size={14} color="#64748b" />
+              <Text style={styles.metaLocation}>{timeLabel}</Text>
             </View>
           )}
 
@@ -116,12 +120,6 @@ export default function EventsScreen({ navigation }) {
               <Ionicons name="location" size={14} color="#64748b" />
               <Text style={styles.metaLocation}>{location}</Text>
             </View>
-          )}
-
-          {!!item?.description && (
-            <Text style={styles.summary}>
-              {item.description}
-            </Text>
           )}
         </View>
       </TouchableOpacity>
@@ -294,21 +292,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  dateColumn: {
+  imageColumn: {
     marginRight: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  eventImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
   },
   datePill: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 80,
+    height: 80,
+    borderRadius: 12,
     backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
