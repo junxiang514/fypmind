@@ -117,12 +117,12 @@ export default function EventDetailScreen({ route }) {
       if (!source) return null;
 
       return Calendar.createCalendarAsync({
-        title: 'MentalHealthApp',
+        title: 'MIND',
         color: '#2563eb',
         entityType: Calendar.EntityTypes.EVENT,
         sourceId: source.id,
         source,
-        name: 'MentalHealthApp',
+        name: 'MIND',
         ownerAccount: 'personal',
         accessLevel: Calendar.CalendarAccessLevel.OWNER,
       });
