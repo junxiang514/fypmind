@@ -82,6 +82,7 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: 'gray',
+        tabBarHideOnKeyboard: true,
       })}
     >
       <Tab.Screen name="Analysis" component={EmotionalTrendScreen} options={{ title: 'Insight' }} />
@@ -172,7 +173,7 @@ export default function App() {
     <SafeAreaProvider>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
         <NavigationContainer linking={linking}>

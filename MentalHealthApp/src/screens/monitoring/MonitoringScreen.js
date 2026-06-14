@@ -45,7 +45,7 @@ export default function MonitoringScreen({ navigation }) {
     day: 'numeric',
   });
 
-  const ToolTile = ({ title, description, iconName, colors, onPress, fullWidth = false }) => (
+  const ToolTile = ({ title, description, iconName, imageSource, colors, onPress, fullWidth = false }) => (
     <TouchableOpacity
       style={[styles.tile, fullWidth && styles.tileFull]}
       onPress={onPress}
@@ -59,7 +59,11 @@ export default function MonitoringScreen({ navigation }) {
       >
         <View style={styles.tileTop}>
           <View style={styles.tileIconWrap}>
-            <Ionicons name={iconName} size={22} color="#fff" />
+            {imageSource ? (
+              <Image source={imageSource} style={styles.tileIconImage} />
+            ) : (
+              <Ionicons name={iconName} size={22} color="#fff" />
+            )}
           </View>
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.85)" />
         </View>
@@ -142,7 +146,7 @@ export default function MonitoringScreen({ navigation }) {
               onPress={() => navigation.navigate('ClinicalTools')}
             />
             <ToolTile
-              title="AI Chat"
+              title="Chat with Lumi"
               description="Talk to the AI assistant anytime."
               iconName="chatbubbles"
               colors={['#10B981', '#059669']} // fresh emerald green gradient
@@ -335,6 +339,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  tileIconImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
   },
   tileBody: {
     marginTop: 16,
