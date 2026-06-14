@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Image, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { fetchMyProfile } from '../../lib/profiles';
 
 export default function MonitoringScreen({ navigation }) {
@@ -44,59 +45,73 @@ export default function MonitoringScreen({ navigation }) {
     day: 'numeric',
   });
 
-  const ToolTile = ({ title, description, iconName, style, onPress, fullWidth = false }) => (
+  const ToolTile = ({ title, description, iconName, colors, onPress, fullWidth = false }) => (
     <TouchableOpacity
-      style={[styles.tile, style, fullWidth && styles.tileFull]}
+      style={[styles.tile, fullWidth && styles.tileFull]}
       onPress={onPress}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
     >
-      <View style={styles.tileTop}>
-        <View style={styles.tileIconWrap}>
-          <Ionicons name={iconName} size={22} color="#fff" />
+      <LinearGradient
+        colors={colors}
+        style={styles.tileGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.tileTop}>
+          <View style={styles.tileIconWrap}>
+            <Ionicons name={iconName} size={22} color="#fff" />
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.85)" />
         </View>
-        <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.9)" />
-      </View>
 
-      <View style={styles.tileBody}>
-        <Text style={styles.tileTitle}>{title}</Text>
-        <Text style={styles.tileDescription} numberOfLines={2}>
-          {description}
-        </Text>
-      </View>
+        <View style={styles.tileBody}>
+          <Text style={styles.tileTitle}>{title}</Text>
+          <Text style={styles.tileDescription} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <Text style={styles.screenTitle}>MIND</Text>
           <View style={styles.dateBadge}>
-            <Ionicons name="calendar-outline" size={14} color="#1d4ed8" />
+            <Ionicons name="calendar-outline" size={14} color="#6366F1" />
             <Text style={styles.dateBadgeText}>{todayLabel}</Text>
           </View>
         </View>
 
-        <View style={styles.dashboardHeader}>
-          <View style={styles.headerGlow} />
-          <View style={styles.headerAvatar}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.headerAvatarImage} />
-            ) : (
-              <View style={styles.headerAvatarFallback}>
-                <Ionicons name="person" size={26} color="#2563EB" />
-              </View>
-            )}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Profile')}
+          style={styles.dashboardHeader}
+        >
+          <View style={styles.headerContent}>
+            <View style={styles.headerAvatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.headerAvatarImage} />
+              ) : (
+                <View style={styles.headerAvatarFallback}>
+                  <Ionicons name="person" size={26} color="#6366F1" />
+                </View>
+              )}
+            </View>
+            <View style={styles.headerTextBlock}>
+              <Text style={styles.greeting}>Hi, {displayName}</Text>
+              <Text style={styles.subGreeting}>Get a quick view of your mental wellbeing tools.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
           </View>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.greeting}>Hi, {displayName}</Text>
-            <Text style={styles.subGreeting}>Get a quick view of your mental wellbeing tools.</Text>
-          </View>
-        </View>
+
+        </TouchableOpacity>
 
         {loading && (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#007AFF" />
+            <ActivityIndicator size="small" color="#6366F1" />
             <Text style={styles.loadingText}>Loading your data...</Text>
           </View>
         )}
@@ -114,47 +129,41 @@ export default function MonitoringScreen({ navigation }) {
           <View style={styles.toolsGrid}>
             <ToolTile
               title="Daily Self Check-in"
-              description="Check in with how you''re feeling today."
+              description="Check in with how you're feeling today."
               iconName="sunny"
-              style={styles.homeAssessmentCard}
+              colors={['#FF6B4A', '#FF9F43']} // sunset orange gradient
               onPress={() => navigation.navigate('DailyAssessment')}
             />
             <ToolTile
               title="Clinical Self Assessment Tools"
               description="Use standardized tests for deeper insights."
               iconName="clipboard"
-              style={styles.homeClinicalCard}
+              colors={['#6366F1', '#4F46E5']} // deep indigo/purple gradient
               onPress={() => navigation.navigate('ClinicalTools')}
             />
             <ToolTile
               title="AI Chat"
               description="Talk to the AI assistant anytime."
               iconName="chatbubbles"
-              style={styles.homeChatCard}
+              colors={['#10B981', '#059669']} // fresh emerald green gradient
               onPress={() => navigation.navigate('AIChat')}
             />
             <ToolTile
               title="Educational Content"
               description="Learn coping strategies and wellness tips."
               iconName="book"
-              style={styles.homeEducationCard}
+              colors={['#0EA5E9', '#2563EB']} // bright sky blue gradient
               onPress={() => navigation.navigate('EducationalContent')}
             />
             <ToolTile
               title="Events & Activities"
               description="Browse events and activities near you."
               iconName="calendar"
-              style={styles.homeEventsCard}
+              colors={['#EC4899', '#D946EF']} // electric pink gradient
               fullWidth
               onPress={() => navigation.navigate('Events')}
             />
           </View>
-        </View>
-
-        <View style={styles.quoteContainer}>
-          <Text style={styles.quoteText}>
-            "Mental health is not a destination, but a process. It's about how you drive, not where you're going."
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -164,149 +173,129 @@ export default function MonitoringScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8FAFC', // Slate 50 background (cool grey/white)
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   content: {
     padding: 20,
-    paddingBottom: 30,
+    paddingBottom: 40,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 20,
   },
   screenTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#0F172A', // Slate 900
+    letterSpacing: -0.5,
   },
   dateBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#EEF2F6',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   dateBadgeText: {
     marginLeft: 6,
     fontSize: 12,
-    color: '#1d4ed8',
+    color: '#6366F1', // Indigo 500
     fontWeight: '700',
   },
   dashboardHeader: {
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF', // Solid plain color
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 26,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  headerGlow: {
-    position: 'absolute',
-    right: -20,
-    top: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#dbeafe',
   },
   headerTextBlock: {
     flex: 1,
   },
   headerAvatar: {
-    marginRight: 12,
+    marginRight: 16,
   },
   headerAvatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#dbeafe',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#F1F5F9',
+    backgroundColor: '#E2E8F0',
   },
   headerAvatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#dbeafe',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
   },
   greeting: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A', // Slate 900
   },
   subGreeting: {
-    fontSize: 14,
-    color: '#64748b',
+    fontSize: 13,
+    color: '#64748B', // Slate 500
     marginTop: 4,
+    lineHeight: 18,
   },
-  headerChipsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  headerChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-  },
-  headerChipText: {
-    marginLeft: 5,
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
+
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    justifyContent: 'center',
   },
   loadingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#555',
+    color: '#64748B',
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#FED7D7',
-    marginBottom: 16,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    marginBottom: 20,
   },
   errorText: {
     marginLeft: 8,
     fontSize: 13,
-    color: '#742A2A',
+    color: '#991B1B',
     flex: 1,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 26,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 14,
   },
   toolsGrid: {
     flexDirection: 'row',
@@ -316,77 +305,50 @@ const styles = StyleSheet.create({
   tile: {
     width: '48%',
     borderRadius: 18,
-    padding: 14,
-    marginBottom: 14,
-    minHeight: 120,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.13,
-    shadowRadius: 6,
+    marginBottom: 16,
+    minHeight: 130,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
+    backgroundColor: '#ffffff',
   },
   tileFull: {
     width: '100%',
   },
+  tileGradient: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
   tileTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   tileIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   tileBody: {
-    marginTop: 14,
+    marginTop: 16,
   },
   tileTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#fff',
+    color: '#ffffff',
+    letterSpacing: -0.2,
   },
   tileDescription: {
-    marginTop: 6,
-    fontSize: 12.5,
-    color: 'rgba(255, 255, 255, 0.92)',
-    lineHeight: 17,
-  },
-  homeAssessmentCard: {
-    backgroundColor: '#F97316', // warm orange
-  },
-  homeClinicalCard: {
-    backgroundColor: '#6366F1', // indigo
-  },
-  homeChatCard: {
-    backgroundColor: '#22C55E', // green
-  },
-  homeEducationCard: {
-    backgroundColor: '#0EA5E9', // sky blue
-  },
-  homeEventsCard: {
-    backgroundColor: '#EC4899', // pink
-  },
-  quoteContainer: {
     marginTop: 4,
-    padding: 18,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quoteText: {
-    fontSize: 15,
-    fontStyle: 'italic',
-    color: '#555',
-    lineHeight: 22,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.88)',
+    lineHeight: 16,
   },
 });
