@@ -45,8 +45,24 @@ export default function TrendGraphCard({
   const scaleFloor = Array(pointCount).fill(1);
   const scaleCeiling = Array(pointCount).fill(5);
 
+  const processedLabels = useMemo(() => {
+    if (!labels || labels.length === 0) return ['No data'];
+    const count = labels.length;
+    const maxLabels = 5;
+    if (count <= maxLabels) return labels;
+
+    const step = Math.floor(count / (maxLabels - 1)) || 1;
+    return labels.map((label, idx) => {
+      // Show first, last, and intermediate labels at step intervals if not too close to the end
+      if (idx === 0 || idx === count - 1 || (idx % step === 0 && (count - 1 - idx) >= step - 1)) {
+        return label;
+      }
+      return '';
+    });
+  }, [labels]);
+
   const data = {
-    labels: labels.length ? labels : ['No data'],
+    labels: processedLabels,
     datasets: [
       {
         data: normalizedSeries.length ? normalizedSeries : [0],
@@ -139,9 +155,8 @@ export default function TrendGraphCard({
 
           <View style={styles.thoughtBubble}>
             <View style={styles.bubbleHeader}>
-              <Ionicons name="chatbubble-ellipses" size={14} color="#6366F1" />
-              <Text style={styles.bubbleTitle}>Lumi's Insight</Text>
             </View>
+
 
             {insightLoading ? (
               <View style={styles.bubbleLoadingRow}>

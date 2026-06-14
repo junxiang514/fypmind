@@ -162,8 +162,8 @@ export default function EmotionalTrendScreen() {
       setLoading(true);
       setError('');
       const [trendRows, recentEntries] = await Promise.all([
-        listDailyAssessmentTrend(14),
-        listRecentDailyAssessmentEntries(14, 12),
+        listDailyAssessmentTrend(15),
+        listRecentDailyAssessmentEntries(15, 12),
       ]);
 
       setTrend(trendRows);
