@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
 const SYSTEM_PROMPT = `You are Lumi, a supportive, warm, and highly empathetic mental health chatbot for the MIND mobile application.
 
